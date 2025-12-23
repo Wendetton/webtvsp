@@ -1,25 +1,127 @@
-// components/AnnounceSettings.js — Configurações do anúncio (com idleSeconds 60–300)
-// 2025-08-15
+// components/AnnounceSettings.js - Redesenhado para modal
 import { useEffect, useState } from 'react';
 import { db } from '../utils/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-export default function AnnounceSettings() {
-  const [open, setOpen] = useState(false);           // painel recolhível
+const styles = {
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 16,
+  },
+  field: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  fieldFull: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    gridColumn: "1 / -1",
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#94a3b8",
+  },
+  input: {
+    padding: "12px 14px",
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 10,
+    color: "#f8fafc",
+    fontSize: 14,
+    fontFamily: "inherit",
+    outline: "none",
+  },
+  select: {
+    padding: "12px 14px",
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 10,
+    color: "#f8fafc",
+    fontSize: 14,
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+  textarea: {
+    padding: "12px 14px",
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 10,
+    color: "#f8fafc",
+    fontSize: 14,
+    fontFamily: "inherit",
+    outline: "none",
+    resize: "vertical",
+    minHeight: 60,
+  },
+  rangeValue: {
+    fontSize: 12,
+    color: "#94a3b8",
+    marginTop: 4,
+  },
+  footer: {
+    marginTop: 24,
+    paddingTop: 16,
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  btnSave: {
+    padding: "12px 24px",
+    background: "#22c55e",
+    border: "none",
+    borderRadius: 10,
+    color: "#052e16",
+    fontSize: 14,
+    fontWeight: 800,
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+  savedMsg: {
+    color: "#22c55e",
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+  },
+  errorMsg: {
+    color: "#ef4444",
+    marginBottom: 16,
+    fontSize: 14,
+  },
+};
+
+export default function AnnounceSettings({ embedded = false }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState('');
 
-  // campos
-  const [announceMode, setAnnounceMode] = useState('auto'); // auto | beep | off (seu tv-ducking usa 'auto'/'beep')
-  const [announceTemplate, setAnnounceTemplate] = useState('Atenção: paciente {{nome}}. Dirija-se à sala {{salaTxt}}.');
-  const [duckVolume, setDuckVolume] = useState(20);      // 0–100
-  const [restoreVolume, setRestoreVolume] = useState(60);// 0–100
-  const [leadMs, setLeadMs] = useState(450);             // ms
+  // Campos
+  const [announceMode, setAnnounceMode] = useState('auto');
+  const [announceTemplate, setAnnounceTemplate] = useState('Atencao: paciente {{nome}}. Dirija-se a sala {{salaTxt}}.');
+  const [duckVolume, setDuckVolume] = useState(20);
+  const [restoreVolume, setRestoreVolume] = useState(60);
+  const [leadMs, setLeadMs] = useState(450);
   const [accentColor, setAccentColor] = useState('#44b2e7');
-  const [idleSeconds, setIdleSeconds] = useState(120);   // NOVO: 60–300
+  const [idleSeconds, setIdleSeconds] = useState(120);
 
-  // carregar config/main
+  // Carregar config
   useEffect(() => {
     (async () => {
       try {
@@ -36,7 +138,7 @@ export default function AnnounceSettings() {
           if (Number.isFinite(data.idleSeconds)) setIdleSeconds(Math.min(300, Math.max(60, Number(data.idleSeconds))));
         }
       } catch (err) {
-        setLoadError('Não foi possível carregar as configurações (verifique as permissões do Firestore).');
+        setLoadError('Nao foi possivel carregar as configuracoes.');
       }
     })();
   }, []);
@@ -54,103 +156,158 @@ export default function AnnounceSettings() {
         restoreVolume: Number(restoreVolume),
         leadMs: Number(leadMs),
         accentColor: String(accentColor),
-        idleSeconds: Math.min(300, Math.max(60, Number(idleSeconds))), // clamp 60–300
+        idleSeconds: Math.min(300, Math.max(60, Number(idleSeconds))),
       }, { merge: true });
       setSaved(true);
-      setTimeout(() => setSaved(false), 1800);
+      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setLoadError('Falha ao salvar (verifique permissões do Firestore).');
+      setLoadError('Falha ao salvar.');
     } finally {
       setSaving(false);
     }
   }
 
-  // estilos simples
-  const wrap = { marginTop: 24, border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, overflow: 'hidden' };
-  const header = { padding: '12px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', background:'rgba(255,255,255,0.04)', fontWeight:800 };
-  const body = { padding: 16, display: open ? 'block' : 'none' };
-  const grid2 = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 };
-  const row = { display:'grid', gap:6, marginBottom:12 };
-  const input = { padding:'10px 12px', borderRadius:8, border:'1px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:'inherit' };
-  const btnPrimary = { padding:'10px 14px', borderRadius:10, border:'none', background:'#22c55e', color:'#0b2b14', fontWeight:800, cursor:'pointer' };
-
   return (
-    <section style={wrap}>
-      <div style={header} onClick={() => setOpen(!open)}>
-        <span>Configurações do anúncio</span>
-        <span style={{opacity:.7, fontSize:13}}>{open ? 'recolher ▲' : 'expandir ▼'}</span>
-      </div>
+    <>
+      <style>{`
+        .config-input:focus {
+          border-color: #22c55e !important;
+        }
+        .config-select option {
+          background: #1f2937;
+          color: #f8fafc;
+        }
+        .btn-save:hover:not(:disabled) {
+          background: #16a34a !important;
+        }
+      `}</style>
 
-      <div style={body}>
-        {loadError && <div style={{color:'#f87171', marginBottom:10}}>{loadError}</div>}
+      <div>
+        {loadError && <div style={styles.errorMsg}>{loadError}</div>}
 
-        {/* Linha 1: modo + cor */}
-        <div style={grid2}>
-          <div style={row}>
-            <label>Modo de anúncio</label>
-            <select value={announceMode} onChange={e=>setAnnounceMode(e.target.value)} style={input}>
-              <option value="auto">Automático (voz + beep, ducking)</option>
-              <option value="beep">Som simples (beep)</option>
-              <option value="off">Sem som</option>
-            </select>
-          </div>
-          <div style={row}>
-            <label>Cor de destaque (TV)</label>
-            <input type="color" value={accentColor} onChange={e=>setAccentColor(e.target.value)} style={{...input, padding:'6px'}} />
-          </div>
-        </div>
-
-        {/* Template */}
-        <div style={row}>
-          <label>Frase do anúncio (template)</label>
-          <textarea
-            value={announceTemplate}
-            onChange={(e) => setAnnounceTemplate(e.target.value)}
-            rows={3}
-            style={{...input, fontFamily:'inherit'}}
-          />
-          <div style={{opacity:.8, fontSize:12}}>
-            Use <code>{'{{nome}}'}</code>, <code>{'{{sala}}'}</code> e <code>{'{{salaTxt}}'}</code>.
-            Ex.: Atenção: paciente <b>{'{{nome}}'}</b>. Dirija-se à sala <b>{'{{sala}}'}</b>.
-          </div>
-        </div>
-
-        {/* Linha 2: volumes */}
-        <div style={grid2}>
-          <div style={row}>
-            <label>Volume do vídeo durante o anúncio (ducking)</label>
-            <input type="range" min={0} max={100} value={duckVolume} onChange={e=>setDuckVolume(Number(e.target.value))} />
-            <div style={{fontSize:12, opacity:.8}}>{duckVolume}%</div>
-          </div>
-          <div style={row}>
-            <label>Volume do vídeo após o anúncio</label>
-            <input type="range" min={0} max={100} value={restoreVolume} onChange={e=>setRestoreVolume(Number(e.target.value))} />
-            <div style={{fontSize:12, opacity:.8}}>{restoreVolume}%</div>
-          </div>
-        </div>
-
-        {/* Linha 3: lead e idle */}
-        <div style={grid2}>
-          <div style={row}>
-            <label>Antecipação do ducking (ms)</label>
-            <input type="number" min={0} max={2000} step={50} value={leadMs} onChange={e=>setLeadMs(Number(e.target.value))} style={input} />
-          </div>
-
-          {/* NOVO: tempo para voltar ao logo */}
-          <div style={row}>
-            <label>Tempo para voltar ao logo (segundos)</label>
-            <input type="range" min={60} max={300} step={10} value={idleSeconds} onChange={e=>setIdleSeconds(Number(e.target.value))} />
-            <div style={{fontSize:12, opacity:.8}}>{idleSeconds} s</div>
+        {/* Anuncio de Voz */}
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Anuncio de Voz</h3>
+          <div style={styles.grid}>
+            <div style={styles.field}>
+              <label style={styles.label}>Modo de anuncio</label>
+              <select
+                value={announceMode}
+                onChange={(e) => setAnnounceMode(e.target.value)}
+                style={styles.select}
+                className="config-select"
+              >
+                <option value="auto">Automatico (voz + beep)</option>
+                <option value="beep">Som simples (beep)</option>
+                <option value="off">Sem som</option>
+              </select>
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label}>Cor de destaque (TV)</label>
+              <input
+                type="color"
+                value={accentColor}
+                onChange={(e) => setAccentColor(e.target.value)}
+                style={{ ...styles.input, padding: 6, height: 44 }}
+                className="config-input"
+              />
+            </div>
+            <div style={styles.fieldFull}>
+              <label style={styles.label}>Frase do anuncio</label>
+              <textarea
+                value={announceTemplate}
+                onChange={(e) => setAnnounceTemplate(e.target.value)}
+                style={styles.textarea}
+                className="config-input"
+                rows={2}
+              />
+              <div style={{ fontSize: 12, color: "#64748b" }}>
+                Use {'{{nome}}'}, {'{{sala}}'} e {'{{salaTxt}}'}.
+              </div>
+            </div>
           </div>
         </div>
 
-        <div style={{marginTop:8}}>
-          <button onClick={save} disabled={saving} style={btnPrimary}>
-            {saving ? 'Salvando…' : 'Salvar'}
+        {/* Volume */}
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Volume</h3>
+          <div style={styles.grid}>
+            <div style={styles.field}>
+              <label style={styles.label}>Volume durante anuncio</label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={duckVolume}
+                onChange={(e) => setDuckVolume(Number(e.target.value))}
+                style={{ width: "100%" }}
+              />
+              <div style={styles.rangeValue}>{duckVolume}%</div>
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label}>Volume apos anuncio</label>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={restoreVolume}
+                onChange={(e) => setRestoreVolume(Number(e.target.value))}
+                style={{ width: "100%" }}
+              />
+              <div style={styles.rangeValue}>{restoreVolume}%</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Temporizacao */}
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Temporizacao</h3>
+          <div style={styles.grid}>
+            <div style={styles.field}>
+              <label style={styles.label}>Antecipacao do ducking (ms)</label>
+              <input
+                type="number"
+                min={0}
+                max={2000}
+                step={50}
+                value={leadMs}
+                onChange={(e) => setLeadMs(Number(e.target.value))}
+                style={styles.input}
+                className="config-input"
+              />
+            </div>
+            <div style={styles.field}>
+              <label style={styles.label}>Tempo para voltar ao logo (s)</label>
+              <input
+                type="number"
+                min={60}
+                max={300}
+                step={10}
+                value={idleSeconds}
+                onChange={(e) => setIdleSeconds(Number(e.target.value))}
+                style={styles.input}
+                className="config-input"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Botao Salvar */}
+        <div style={styles.footer}>
+          {saved && <span style={styles.savedMsg}>Salvo!</span>}
+          <button
+            onClick={save}
+            disabled={saving}
+            style={{
+              ...styles.btnSave,
+              opacity: saving ? 0.6 : 1,
+            }}
+            className="btn-save"
+          >
+            {saving ? 'Salvando...' : 'Salvar Configuracoes'}
           </button>
-          {saved && <span style={{marginLeft:10, color:'#4ade80', fontWeight:700}}>Salvo!</span>}
         </div>
       </div>
-    </section>
+    </>
   );
 }
