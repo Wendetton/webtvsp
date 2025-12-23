@@ -319,8 +319,8 @@ export default function Admin() {
           <div style={styles.logoArea}>
             <div style={styles.logoIcon}>📢</div>
             <div>
-              <h1 style={styles.logoTextH1}>Nome da Clínica</h1>
-              <span style={styles.logoTextSpan}>Painel de Chamadas</span>
+              <h1 style={styles.logoTextH1}>São Peregrino - Medicina Especializada</h1>
+              <span style={styles.logoTextSpan}>Painel de Chamadas - Created by Fernando Azevedo</span>
             </div>
           </div>
           <div style={styles.headerActions}>
