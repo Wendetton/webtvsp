@@ -1,4 +1,4 @@
-// pages/tv.js — topo com YouTube 16:9 (playlist opcional) + carrossel; rodapé com chamadas
+// pages/tv.js - Layout 100% responsivo + Autoplay garantido
 import Head from 'next/head';
 import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
@@ -8,36 +8,42 @@ import YoutubePlayer from '../components/YoutubePlayer';
 import Carousel from '../components/Carousel';
 
 const GROUP_WINDOW_MS = 30000;
-const DUAL_KEEP_MS   = 60000;
+const DUAL_KEEP_MS = 60000;
 
-function applyAccent(color){
+function applyAccent(color) {
   try { document.documentElement.style.setProperty('--tv-accent', color || '#44b2e7'); } catch {}
 }
-function enqueueAudio(audioQueueRef, playingRef, nome, sala){
+
+function enqueueAudio(audioQueueRef, playingRef, nome, sala) {
   if (!nome) return;
-  audioQueueRef.current.push({nome, sala});
+  audioQueueRef.current.push({ nome, sala });
   playQueue(audioQueueRef, playingRef);
 }
-function playQueue(audioQueueRef, playingRef){
+
+function playQueue(audioQueueRef, playingRef) {
   if (playingRef.current) return;
   const next = audioQueueRef.current.shift();
   if (!next) return;
   playingRef.current = true;
-  try { if (typeof window !== 'undefined' && typeof window.tvAnnounce === 'function') { window.tvAnnounce(String(next.nome||''), next.sala != null ? String(next.sala) : ''); } } catch {}
+  try {
+    if (typeof window !== 'undefined' && typeof window.tvAnnounce === 'function') {
+      window.tvAnnounce(String(next.nome || ''), next.sala != null ? String(next.sala) : '');
+    }
+  } catch {}
   setTimeout(() => { playingRef.current = false; playQueue(audioQueueRef, playingRef); }, 4500);
 }
 
-export default function TV(){
+export default function TV() {
   const [history, setHistory] = useState([]);
   const [idleSeconds, setIdleSeconds] = useState(120);
   const [forcedIdle, setForcedIdle] = useState(false);
   const [lastCallAt, setLastCallAt] = useState(null);
 
-  // YouTube: playlist preferida; fallback: videoId de config
+  // YouTube
   const [videoId, setVideoId] = useState('');
   const [ytList, setYtList] = useState([]);
 
-  // relógio p/ tempo (60s/idle)
+  // Relogio
   const [nowMs, setNowMs] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t); }, []);
 
@@ -47,7 +53,7 @@ export default function TV(){
   const audioQueueRef = useRef([]);
   const playingRef = useRef(false);
 
-  // Histórico (desc)
+  // Historico
   useEffect(() => {
     const qCalls = query(collection(db, 'calls'), orderBy('timestamp', 'desc'), limit(6));
     const unsub = onSnapshot(qCalls, (snap) => {
@@ -66,9 +72,9 @@ export default function TV(){
     return () => unsub();
   }, []);
 
-  // Gatilho de anúncio
+  // Gatilho de anuncio
   useEffect(() => {
-    const unsub = onSnapshot(doc(db,'config','announce'), (snap) => {
+    const unsub = onSnapshot(doc(db, 'config', 'announce'), (snap) => {
       if (!snap.exists()) return;
       const d = snap.data();
       const nonce = String(d.nonce || '');
@@ -81,7 +87,7 @@ export default function TV(){
           if (d.idle === false) setForcedIdle(false);
           enqueueAudio(audioQueueRef, playingRef, d.nome, d.sala);
           const row = document.querySelector('.current-call');
-          if (row){ row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); }
+          if (row) { row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); }
         }
       }
       if (typeof d.idle === 'boolean') setForcedIdle(Boolean(d.idle));
@@ -92,22 +98,22 @@ export default function TV(){
   // Config
   useEffect(() => {
     let usedMain = false;
-    const unsubMain = onSnapshot(doc(db,'config','main'), (snap) => {
+    const unsubMain = onSnapshot(doc(db, 'config', 'main'), (snap) => {
       if (snap.exists()) { usedMain = true; applyConfig(snap.data()); }
     });
-    const unsubCol = onSnapshot(collection(db,'config'), (snap) => {
+    const unsubCol = onSnapshot(collection(db, 'config'), (snap) => {
       if (!usedMain && !snap.empty) applyConfig(snap.docs[0].data());
     });
-    function applyConfig(data){
+    function applyConfig(data) {
       if (!data) return;
       const cfg = {
-        announceTemplate: data.announceTemplate || 'Atenção: paciente {{nome}}. Dirija-se à sala {{salaTxt}}.',
+        announceTemplate: data.announceTemplate || 'Atencao: paciente {{nome}}. Dirija-se a sala {{salaTxt}}.',
         duckVolume: Number.isFinite(data.duckVolume) ? Number(data.duckVolume) : 20,
         restoreVolume: Number.isFinite(data.restoreVolume) ? Number(data.restoreVolume) : 60,
         leadMs: Number.isFinite(data.leadMs) ? Number(data.leadMs) : 450,
         accentColor: data.accentColor || '#44b2e7',
         idleSeconds: Number.isFinite(data.idleSeconds) ? Math.min(300, Math.max(60, Number(data.idleSeconds))) : 120,
-        videoId: data.videoId || '', // se playlist vazia
+        videoId: data.videoId || '',
       };
       applyAccent(cfg.accentColor);
       setIdleSeconds(cfg.idleSeconds);
@@ -117,34 +123,33 @@ export default function TV(){
     return () => { unsubMain(); unsubCol(); };
   }, []);
 
-       // Volume do YouTube vindo do /admin (config/control.ytVolume) → evento global
-    useEffect(() => {
-      const ref = doc(db, 'config', 'control');
-      const unsub = onSnapshot(ref, (snap) => {
-        if (!snap.exists()) return;
-        const d = snap.data();
-        if (!Number.isFinite(d.ytVolume)) return;
-        const v = Math.max(0, Math.min(100, Math.round(d.ytVolume)));
-        try {
-          const ev = new CustomEvent('tv:ytVolume', { detail: { v } });
-          window.dispatchEvent(ev);
-        } catch {
-          try {
-            const ev = document.createEvent('CustomEvent');
-            ev.initCustomEvent('tv:ytVolume', false, false, { v });
-            window.dispatchEvent(ev);
-          } catch {}
-        }
-      });
-      return () => unsub();
-    }, []);
-
-      
-  // YouTube playlist (ytPlaylist)
+  // Volume do YouTube
   useEffect(() => {
-    const q = query(collection(db, 'ytPlaylist'), orderBy('order','asc'));
+    const ref = doc(db, 'config', 'control');
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      if (!Number.isFinite(d.ytVolume)) return;
+      const v = Math.max(0, Math.min(100, Math.round(d.ytVolume)));
+      try {
+        const ev = new CustomEvent('tv:ytVolume', { detail: { v } });
+        window.dispatchEvent(ev);
+      } catch {
+        try {
+          const ev = document.createEvent('CustomEvent');
+          ev.initCustomEvent('tv:ytVolume', false, false, { v });
+          window.dispatchEvent(ev);
+        } catch {}
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // YouTube playlist
+  useEffect(() => {
+    const q = query(collection(db, 'ytPlaylist'), orderBy('order', 'asc'));
     const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
         .map(x => String(x.videoId || '').trim())
         .filter(Boolean);
       setYtList(list);
@@ -152,7 +157,7 @@ export default function TV(){
     return () => unsub();
   }, []);
 
-  // Derivações de UI
+  // Derivacoes de UI
   const withinIdle = lastCallAt ? (nowMs - lastCallAt) < idleSeconds * 1000 : false;
   const isIdle = forcedIdle || !history.length || !withinIdle;
 
@@ -183,19 +188,19 @@ export default function TV(){
     <div className="tv-screen">
       <Head>
         <title>Chamador na TV</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </Head>
 
-      {/* TOPO: YouTube 16:9 por altura + carrossel horizontal */}
-      <div className="tv-video-wrap">
-        <div className="tv-video-inner">
+      {/* AREA PRINCIPAL: YouTube + Carrossel */}
+      <div className="tv-main">
+        <div className="tv-video">
           {hasPlaylist ? (
             <YoutubePlayer playlist={ytList} />
           ) : hasSingleVideo ? (
             <YoutubePlayer videoId={videoId} />
           ) : (
-            <div className="flex center" style={{ width:'100%', height:'100%', opacity:0.6 }}>
-              <div>Configure um vídeo no Admin (ou crie uma playlist)…</div>
+            <div className="tv-placeholder">
+              <div>Configure um video no Admin</div>
             </div>
           )}
         </div>
@@ -204,23 +209,23 @@ export default function TV(){
         </div>
       </div>
 
-      {/* RODAPÉ */}
+      {/* RODAPE: Chamadas */}
       <div className="tv-footer">
         <div className="called-list">
           {recentItems.length ? (
             recentItems.map((h, i) => (
               <span key={i} className="called-chip">
-                {h.nome} — Consultório {h.sala}
+                {h.nome} - Consultorio {h.sala}
               </span>
             ))
           ) : (
-            <span className="muted">Sem chamados recentes…</span>
+            <span className="muted">Sem chamados recentes</span>
           )}
         </div>
 
         <div className={`current-call ${isIdle ? 'idle idle-full' : ''}`}>
           {isIdle ? (
-            <img className="idle-logo" src="/logo.png" alt="Logo da clínica" />
+            <img className="idle-logo" src="/logo.png" alt="Logo" />
           ) : (
             <>
               <div className="label">Chamando agora</div>
@@ -228,16 +233,16 @@ export default function TV(){
                 <div className="now-cards cols-2">
                   {currentGroup.map((it) => (
                     <div key={it.id} className="now-card">
-                      <div className="now-name">{String(it.nome || '—')}</div>
-                      <div className="now-room">Consultório {String(it.sala || '')}</div>
+                      <div className="now-name">{String(it.nome || '-')}</div>
+                      <div className="now-room">Consultorio {String(it.sala || '')}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <>
-                  <div id="current-call-name">{String(single?.nome || '—')}</div>
-                  <div className="sub">{single?.sala ? `Consultório ${String(single.sala)}` : ''}</div>
-                </>
+                <div className="now-single">
+                  <div id="current-call-name">{String(single?.nome || '-')}</div>
+                  <div className="sub">{single?.sala ? `Consultorio ${String(single.sala)}` : ''}</div>
+                </div>
               )}
             </>
           )}
@@ -246,146 +251,301 @@ export default function TV(){
 
       <Script src="/tv-ducking.js" strategy="afterInteractive" />
 
-      {/* Estilos do topo (16:9) + cartões */}
+      {/* ===== ESTILOS RESPONSIVOS ===== */}
       <style jsx global>{`
-        .tv-video-wrap{
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 14px;
-          align-items: center;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body, #__next { 
+          height: 100%; 
+          width: 100%;
+          overflow: hidden;
         }
-        .tv-video-inner{
-          height: 100%;
-          aspect-ratio: 16 / 9;
-          width: auto;
-          max-width: 100%;
-          justify-self: start;
+        body { 
+          font-family: system-ui, -apple-system, sans-serif;
+          background: #0b1220;
+          color: #fefefe;
         }
-        .tv-video-inner > *{ width: 100%; height: 100%; }
-        .tv-carousel{ height: 100%; display: grid; }
 
-        .current-call.idle.idle-full {
+        :root {
+          --tv-bg: #0b1220;
+          --tv-panel: #0e1626;
+          --tv-accent: #44b2e7;
+          --tv-text: #fefefe;
+          --tv-muted: #93a0b3;
+          
+          /* Alturas responsivas baseadas em vh */
+          --footer-height: 28vh;
+          --main-height: 72vh;
+          --gap: 1.5vh;
+          --padding: 1.5vh;
+        }
+
+        /* ===== TELA PRINCIPAL ===== */
+        .tv-screen {
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          background: var(--tv-bg);
+          overflow: hidden;
+        }
+
+        /* ===== AREA PRINCIPAL (Video + Carrossel) ===== */
+        .tv-main {
+          flex: 1;
+          display: grid;
+          grid-template-columns: 1fr minmax(20vw, 25vw);
+          gap: var(--gap);
+          padding: var(--padding);
+          min-height: 0; /* Importante para flex funcionar */
+        }
+
+        /* Video container - mantem proporcao 16:9 */
+        .tv-video {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          background: #000;
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        .tv-video > * {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
+
+        .tv-placeholder {
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #ffffff;
-          border-radius: inherit;
-          box-shadow: inset 0 0 0 1px rgba(0,0,0,.06), 0 10px 28px rgba(0,0,0,.08);
-          transition: background .25s ease, box-shadow .25s ease;
-        }
-        .current-call.idle.idle-full .idle-logo {
-          max-width: clamp(220px, 40%, 600px);
-          max-height: 70%;
-          object-fit: contain;
-          filter: drop-shadow(0 6px 16px rgba(0,0,0,.12));
-          opacity: 0; transform: scale(.98);
-          animation: tvFadeIn 380ms ease forwards;
+          height: 100%;
+          color: var(--tv-muted);
+          font-size: 2vh;
         }
 
-        .now-cards { display: grid; gap: 12px; margin-top: 8px; }
-        .now-cards.cols-2 { grid-template-columns: 1fr 1fr; }
-        .now-card{
-          background: rgba(255,255,255,0.08);
-          border: 1px solid rgba(255,255,255,0.12);
-          border-radius: 14px;
-          padding: clamp(10px, 1.6vw, 16px);
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          min-height: clamp(90px, 12vw, 160px);
-          box-shadow: 0 6px 20px rgba(0,0,0,.12);
-          animation: tvFadeIn 260ms ease both;
+        /* Carrossel */
+        .tv-carousel {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 12px;
+          overflow: hidden;
         }
-        .now-name { font-size: clamp(28px, 3.6vw, 56px); font-weight: 900; line-height: 1.1; text-align: center; letter-spacing: .3px; }
-        .now-room { margin-top: 6px; font-size: clamp(14px, 1.3vw, 18px); opacity: .9; font-weight: 700; }
 
-        /* ===== Alturas fixas (sem pular layout) ===== */
-        :root{
-          /* ajuste aqui se quiser (padrão indicado): */
-          --called-h: clamp(44px, 6vh, 56px);   /* faixa "Últimos chamados"  */
-          --call-h:   clamp(160px, 19vh, 220px);/* box "Chamando agora"      */
+        /* ===== RODAPE ===== */
+        .tv-footer {
+          height: var(--footer-height);
+          background: var(--tv-panel);
+          padding: var(--padding) calc(var(--padding) * 2);
+          border-top: 2px solid rgba(255,255,255,0.08);
+          box-shadow: 0 -12px 24px rgba(0,0,0,0.35);
+          display: flex;
+          flex-direction: column;
+          gap: var(--gap);
         }
-        
-        /* o rodapé vira um grid de 2 linhas com alturas fixas */
-        .tv-footer{
-          display: grid;
-          grid-template-rows: var(--called-h) var(--call-h);
-          gap: 10px;
-        }
-        
-        /* faixa "Últimos chamados": fixa e sem quebra de linha */
-        .called-list{
-          height: var(--called-h);
+
+        /* Lista de chamados recentes */
+        .called-list {
+          height: 6vh;
           display: flex;
           align-items: center;
-          gap: 8px;
-          overflow: hidden;
-          white-space: nowrap;
+          gap: 1.5vw;
+          overflow-x: auto;
+          scrollbar-width: none;
         }
-        .called-list .called-chip{ flex: 0 0 auto; }
-        
-        /* box "Chamando agora": altura fixa SEMPRE */
-        .current-call{
-          height: var(--call-h);
+        .called-list::-webkit-scrollbar { display: none; }
+
+        .called-chip {
+          display: inline-flex;
+          align-items: center;
+          padding: 1vh 2vw;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 999px;
+          font-weight: 800;
+          font-size: clamp(14px, 2vw, 24px);
+          color: var(--tv-text);
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        /* Area de chamada atual */
+        .current-call {
+          flex: 1;
           border-radius: 16px;
           position: relative;
           overflow: hidden;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
-        }
-        
-        /* conteúdo interno sempre ocupa 100% da altura do box */
-        .now-cards, .now-single{ height: 100%; }
-        .now-single{
-          display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-        }
-        
-        /* (garante que os dois cartões cresçam por igual no modo duplo) */
-        .now-cards{
-          display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch;
-        }
-        .now-card{ height: 100%; }
-
-                /* ===== Ajustes finos — chips, logo e respiro no modo duplo ===== */
-        :root{
-          /* Chips (Chamados recentes) */
-          --chip-vpad: 6px;          /* acolchoamento vertical dentro do chip */
-          --chip-hpad: 12px;         /* acolchoamento horizontal */
-          /* Logo (idle) — aumente aqui se quiser ainda maior */
-          --idle-logo-maxw: clamp(320px, 56%, 900px);
-          --idle-logo-maxh: 85%;
-        }
-        
-        /* A) Chips não cortam no topo e centralizam verticalmente */
-        .called-list{ line-height: 1; } /* zera variação de altura por fonte */
-        .called-list .called-chip{
-          display: inline-flex;
+          background: radial-gradient(120% 120% at 50% 50%, rgba(68,178,231,0.18) 0%, rgba(68,178,231,0.06) 100%);
+          outline: 2px solid rgba(68,178,231,0.55);
+          display: flex;
+          flex-direction: column;
           align-items: center;
-          height: calc(var(--called-h) - 8px);   /* 4px de respiro em cima/baixo */
-          padding: var(--chip-vpad) var(--chip-hpad);
-          border-radius: 999px;
-          line-height: 1.05;                     /* evita “cortar” topo da fonte */
-          overflow: hidden;
-          text-overflow: ellipsis;
+          justify-content: center;
+          padding: 2vh;
         }
-        
-        /* B) Logo maior no idle */
-        .current-call.idle.idle-full .idle-logo{
-          max-width: var(--idle-logo-maxw);
-          max-height: var(--idle-logo-maxh);
-          width: 100%;
-          height: auto;
+
+        .current-call .label {
+          font-size: clamp(12px, 1.8vh, 18px);
+          color: var(--tv-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 900;
+          margin-bottom: 1vh;
+        }
+
+        /* Modo IDLE (logo) */
+        .current-call.idle.idle-full {
+          background: #ffffff;
+          outline: none;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+        }
+
+        .current-call.idle.idle-full .idle-logo {
+          max-width: 60%;
+          max-height: 80%;
           object-fit: contain;
+          filter: drop-shadow(0 6px 16px rgba(0,0,0,0.12));
+          animation: tvFadeIn 380ms ease forwards;
         }
+
+        /* Nome do paciente - SINGLE */
+        .now-single {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          width: 100%;
+        }
+
+        #current-call-name {
+          font-weight: 900;
+          font-size: clamp(32px, 8vh, 80px);
+          line-height: 1.1;
+          color: var(--tv-text);
+          text-shadow: 0 3px 18px rgba(0,0,0,0.55);
+          word-break: break-word;
+        }
+
+        .current-call .sub {
+          margin-top: 1vh;
+          font-size: clamp(16px, 3vh, 28px);
+          font-weight: 800;
+          color: var(--tv-accent);
+        }
+
+        /* Modo DUAL (2 pacientes) */
+        .now-cards {
+          display: grid;
+          gap: 2vw;
+          width: 100%;
+          height: 100%;
+        }
+        .now-cards.cols-2 {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .now-card {
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 14px;
+          padding: 2vh 2vw;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        }
+
+        .now-name {
+          font-size: clamp(24px, 5vh, 48px);
+          font-weight: 900;
+          line-height: 1.1;
+          text-align: center;
+        }
+
+        .now-room {
+          margin-top: 1vh;
+          font-size: clamp(12px, 2vh, 18px);
+          opacity: 0.9;
+          font-weight: 700;
+        }
+
+        /* Animacoes */
+        @keyframes tvFadeIn {
+          from { opacity: 0; transform: scale(0.98); }
+          to { opacity: 1; transform: none; }
+        }
+
+        @keyframes flashGlow {
+          0% { box-shadow: 0 0 0 0 rgba(68,178,231,0.9); }
+          70% { box-shadow: 0 0 24px 16px rgba(68,178,231,0.0); }
+          100% { box-shadow: 0 0 0 0 rgba(68,178,231,0.0); }
+        }
+
+        @keyframes beacon {
+          0%, 100% { filter: drop-shadow(0 0 0 rgba(68,178,231,0)); }
+          50% { filter: drop-shadow(0 0 18px rgba(68,178,231,0.9)); }
+        }
+
+        .current-call.flash {
+          animation: flashGlow 1.1s ease-out 2;
+        }
+
+        .current-call.flash #current-call-name {
+          animation: beacon 1.1s ease-out 2;
+        }
+
+        /* Util */
+        .muted { color: var(--tv-muted); }
+
+        /* ===== RESPONSIVIDADE PARA DIFERENTES TELAS ===== */
         
-        /* C) Mais respiro no box "Chamando agora" (evita encostar na borda inferior) */
-        .now-shell{ padding: 10px 12px 16px; }          /* + espaço no rodapé interno */
-        .now-cards{ gap: 14px; }                         /* um pouquinho mais de gap */
-        .now-card{ padding: clamp(12px, 1.8vw, 22px); }  /* mais espaço dentro do cartão */
-        .now-name{ line-height: 1.12; }                  /* evita encostar no topo */
+        /* TV Vertical / Portrait */
+        @media (orientation: portrait) {
+          .tv-main {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr 40vh;
+          }
+          
+          :root {
+            --footer-height: 25vh;
+          }
+        }
 
+        /* Telas pequenas (tablets, monitores pequenos) */
+        @media (max-height: 600px) {
+          :root {
+            --footer-height: 32vh;
+            --padding: 1vh;
+            --gap: 1vh;
+          }
+          
+          #current-call-name {
+            font-size: clamp(24px, 6vh, 48px);
+          }
+        }
 
-        @keyframes tvFadeIn { to { opacity: 1; transform: none; } }
+        /* Fire TV Stick / TV Box */
+        @media (min-width: 1280px) and (min-height: 720px) {
+          :root {
+            --footer-height: 26vh;
+          }
+        }
+
+        /* 4K TVs */
+        @media (min-width: 3000px) {
+          :root {
+            --footer-height: 25vh;
+            --padding: 2vh;
+          }
+        }
       `}</style>
     </div>
   );
 }
-
