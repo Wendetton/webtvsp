@@ -273,10 +273,10 @@ export default function TV() {
           --tv-muted: #93a0b3;
           
           /* Alturas responsivas baseadas em vh */
-          --footer-height: 28vh;
-          --main-height: 72vh;
-          --gap: 1.5vh;
-          --padding: 1.5vh;
+          --footer-height: 38vh;
+          --main-height: 62vh;
+          --gap: 1.2vh;
+          --padding: 1.2vh;
         }
 
         /* ===== TELA PRINCIPAL ===== */
@@ -351,7 +351,8 @@ export default function TV() {
 
         /* Lista de chamados recentes */
         .called-list {
-          height: 6vh;
+          height: 7vh;
+          min-height: 50px;
           display: flex;
           align-items: center;
           gap: 1.5vw;
@@ -363,12 +364,12 @@ export default function TV() {
         .called-chip {
           display: inline-flex;
           align-items: center;
-          padding: 1vh 2vw;
+          padding: 1.2vh 2vw;
           background: rgba(255,255,255,0.05);
           border: 1px solid rgba(255,255,255,0.12);
           border-radius: 999px;
           font-weight: 800;
-          font-size: clamp(14px, 2vw, 24px);
+          font-size: clamp(16px, 2.2vw, 26px);
           color: var(--tv-text);
           white-space: nowrap;
           flex-shrink: 0;
@@ -386,16 +387,16 @@ export default function TV() {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 2vh;
+          padding: 2.5vh 3vw;
         }
 
         .current-call .label {
-          font-size: clamp(12px, 1.8vh, 18px);
+          font-size: clamp(14px, 2.2vh, 22px);
           color: var(--tv-muted);
           text-transform: uppercase;
           letter-spacing: 0.08em;
           font-weight: 900;
-          margin-bottom: 1vh;
+          margin-bottom: 1.5vh;
         }
 
         /* Modo IDLE (logo) */
@@ -425,16 +426,17 @@ export default function TV() {
 
         #current-call-name {
           font-weight: 900;
-          font-size: clamp(32px, 8vh, 80px);
-          line-height: 1.1;
+          font-size: clamp(40px, 10vh, 100px);
+          line-height: 1.15;
           color: var(--tv-text);
           text-shadow: 0 3px 18px rgba(0,0,0,0.55);
           word-break: break-word;
+          padding: 0 2vw;
         }
 
         .current-call .sub {
-          margin-top: 1vh;
-          font-size: clamp(16px, 3vh, 28px);
+          margin-top: 1.5vh;
+          font-size: clamp(20px, 4vh, 36px);
           font-weight: 800;
           color: var(--tv-accent);
         }
@@ -454,7 +456,7 @@ export default function TV() {
           background: rgba(255,255,255,0.08);
           border: 1px solid rgba(255,255,255,0.12);
           border-radius: 14px;
-          padding: 2vh 2vw;
+          padding: 2.5vh 2vw;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -463,15 +465,15 @@ export default function TV() {
         }
 
         .now-name {
-          font-size: clamp(24px, 5vh, 48px);
+          font-size: clamp(28px, 6vh, 56px);
           font-weight: 900;
-          line-height: 1.1;
+          line-height: 1.15;
           text-align: center;
         }
 
         .now-room {
-          margin-top: 1vh;
-          font-size: clamp(12px, 2vh, 18px);
+          margin-top: 1.5vh;
+          font-size: clamp(16px, 2.5vh, 24px);
           opacity: 0.9;
           font-weight: 700;
         }
@@ -510,39 +512,43 @@ export default function TV() {
         @media (orientation: portrait) {
           .tv-main {
             grid-template-columns: 1fr;
-            grid-template-rows: 1fr 40vh;
+            grid-template-rows: 1fr 35vh;
           }
           
           :root {
-            --footer-height: 25vh;
+            --footer-height: 30vh;
           }
         }
 
         /* Telas pequenas (tablets, monitores pequenos) */
         @media (max-height: 600px) {
           :root {
-            --footer-height: 32vh;
+            --footer-height: 40vh;
             --padding: 1vh;
             --gap: 1vh;
           }
           
           #current-call-name {
-            font-size: clamp(24px, 6vh, 48px);
+            font-size: clamp(28px, 8vh, 56px);
+          }
+          
+          .current-call .sub {
+            font-size: clamp(16px, 3vh, 24px);
           }
         }
 
         /* Fire TV Stick / TV Box */
         @media (min-width: 1280px) and (min-height: 720px) {
           :root {
-            --footer-height: 26vh;
+            --footer-height: 36vh;
           }
         }
 
         /* 4K TVs */
         @media (min-width: 3000px) {
           :root {
-            --footer-height: 25vh;
-            --padding: 2vh;
+            --footer-height: 35vh;
+            --padding: 1.5vh;
           }
         }
       `}</style>
