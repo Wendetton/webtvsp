@@ -58,7 +58,7 @@ export default function TV() {
     const qCalls = query(collection(db, 'calls'), orderBy('timestamp', 'desc'), limit(6));
     const unsub = onSnapshot(qCalls, (snap) => {
       const raw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const list = raw.filter(x => !x.test && !x.recall);
+      const list = raw.filter(x => !x.test);
       setHistory(list);
       if (list.length) {
         const t = list[0].timestamp;
