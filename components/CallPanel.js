@@ -186,13 +186,13 @@ const styles = {
   },
   historyItemName: {
     fontWeight: 700,
-    fontSize: 15,
+    fontSize: 13,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
   historyItemRoom: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#94a3b8",
     whiteSpace: "nowrap",
   },
@@ -312,10 +312,34 @@ export default function CallPanel() {
   }, [tvLastCallAt, tvIdleSeconds]);
 
   const tvIsIdle = tvForcedIdle || tvAutoIdle || tvHistory.length === 0;
+  
+  // Logica para agrupar chamadas simultaneas (igual a TV)
+  const GROUP_WINDOW_MS = 30000;
+  const DUAL_KEEP_MS = 60000;
+  
+  let currentGroup = [];
+  if (!tvIsIdle && tvHistory.length) {
+    const first = tvHistory[0];
+    const firstMs = first.timestamp?.toMillis?.() || (first.timestamp?.seconds ? first.timestamp.seconds * 1000 : null);
+    if (firstMs != null) {
+      const second = tvHistory[1];
+      if (second) {
+        const secondMs = second.timestamp?.toMillis?.() || (second.timestamp?.seconds ? second.timestamp.seconds * 1000 : null);
+        const isPair = secondMs != null && (firstMs - secondMs) <= GROUP_WINDOW_MS;
+        const keepDual = isPair && (Date.now() - secondMs) < DUAL_KEEP_MS;
+        currentGroup = (isPair && keepDual) ? [first, second] : [first];
+      } else {
+        currentGroup = [first];
+      }
+    }
+  }
+  
+  // Texto do "Chamando agora" - mostra todos os pacientes do grupo
   const tvNow = tvIsIdle
     ? "- (Logo exibida)"
-    : (tvHistory[0]?.nome ? `${tvHistory[0].nome} - Consultorio ${tvHistory[0].sala}` : "-");
-  const tvRecent = tvIsIdle ? tvHistory.slice(0, 2) : tvHistory.slice(1, 3);
+    : currentGroup.length > 1
+      ? currentGroup.map(p => `${p.nome} - Cons. ${p.sala}`).join("  |  ")
+      : (currentGroup[0]?.nome ? `${currentGroup[0].nome} - Consultorio ${currentGroup[0].sala}` : "-");
 
   // Dispara anuncio
   async function fireAnnounce(nome, sala, idle = false) {
@@ -490,19 +514,9 @@ export default function CallPanel() {
             <div style={styles.tvPreviewHeader}>
               <span>📺</span> Status na TV
             </div>
-            <div style={styles.tvPreviewContent} className="tv-preview-content">
-              <div style={styles.tvPreviewRow}>
-                <span style={styles.tvPreviewLabel}>Chamando agora:</span>
-                <span style={styles.tvPreviewValue}>{tvNow}</span>
-              </div>
-              <div style={styles.tvPreviewRow}>
-                <span style={styles.tvPreviewLabel}>Chamados recentes:</span>
-                <span style={styles.tvPreviewValue}>
-                  {tvRecent.length
-                    ? tvRecent.map(h => h.nome).join(", ")
-                    : "-"}
-                </span>
-              </div>
+            <div style={styles.tvPreviewRow}>
+              <span style={styles.tvPreviewLabel}>Chamando agora:</span>
+              <span style={{...styles.tvPreviewValue, marginTop: 4}}>{tvNow}</span>
             </div>
           </div>
 
