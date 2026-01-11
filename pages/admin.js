@@ -12,7 +12,6 @@ import AnnounceSettings from "../components/AnnounceSettings";
 
 /* ========== ESTILOS ========== */
 const styles = {
-  // Reset e variáveis
   page: {
     minHeight: "100vh",
     background: "#0a0f1a",
@@ -20,7 +19,6 @@ const styles = {
     fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
   },
   
-  // Header
   header: {
     background: "linear-gradient(180deg, rgba(17,24,39,0.98) 0%, rgba(10,15,26,0.95) 100%)",
     borderBottom: "1px solid rgba(255,255,255,0.08)",
@@ -99,7 +97,6 @@ const styles = {
     transition: "all 0.2s",
   },
   
-  // Main
   main: {
     maxWidth: 1200,
     margin: "0 auto",
@@ -109,7 +106,6 @@ const styles = {
     gap: 24,
   },
   
-  // Media Section
   mediaSection: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
@@ -135,7 +131,6 @@ const styles = {
     padding: "16px 18px",
   },
   
-  // Modal
   modalOverlay: {
     position: "fixed",
     inset: 0,
@@ -319,8 +314,8 @@ export default function Admin() {
           <div style={styles.logoArea}>
             <div style={styles.logoIcon}>📢</div>
             <div>
-              <h1 style={styles.logoTextH1}>São Peregrino - Medicina Especializada</h1>
-              <span style={styles.logoTextSpan}>Painel de Chamadas - Created by Fernando Azevedo</span>
+              <h1 style={styles.logoTextH1}>Nome da Clínica</h1>
+              <span style={styles.logoTextSpan}>Painel de Chamadas</span>
             </div>
           </div>
           <div style={styles.headerActions}>
@@ -377,7 +372,7 @@ export default function Admin() {
             </button>
           </div>
           <div style={styles.modalBody}>
-            <AnnounceSettings embedded={true} />
+            <AnnounceSettings />
           </div>
         </div>
       </div>
