@@ -339,7 +339,7 @@ export default function CallPanel() {
     ? "- (Logo exibida)"
     : currentGroup.length > 1
       ? currentGroup.map(p => `${p.nome} - Cons. ${p.sala}`).join("  |  ")
-      : (currentGroup[0]?.nome ? `${currentGroup[0].nome} - Consultorio ${currentGroup[0].sala}` : "-");
+      : (currentGroup[0]?.nome ? `${currentGroup[0].nome} - Consultório ${currentGroup[0].sala}` : "-");
 
   // Dispara anuncio
   async function fireAnnounce(nome, sala, idle = false) {
@@ -493,7 +493,7 @@ export default function CallPanel() {
               className="call-select"
             >
               {ROOMS.map(r => (
-                <option key={r} value={r}>Consultorio {r}</option>
+                <option key={r} value={r}>Consultório {r}</option>
               ))}
             </select>
             <button
@@ -530,7 +530,7 @@ export default function CallPanel() {
                 <div key={it.id} style={styles.historyItem} className="history-item">
                   <div style={styles.historyItemInfo}>
                     <span style={styles.historyItemName}>{it.nome}</span>
-                    <span style={styles.historyItemRoom}>Consultorio {it.sala}</span>
+                    <span style={styles.historyItemRoom}>Consultório {it.sala}</span>
                   </div>
                   <button
                     onClick={() => handleRecall(it.id)}
