@@ -1,563 +1,589 @@
-// components/CallPanel.js - Redesenhado com rechamar corrigido
-import { useEffect, useState } from "react";
-import { db } from "../utils/firebase";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  query,
-  orderBy,
-  limit,
-  onSnapshot,
-  getDocs,
-  deleteDoc,
-  doc,
-  setDoc,
-} from "firebase/firestore";
+// pages/tv.js - Layout 100% responsivo + Autoplay garantido
+import Head from 'next/head';
+import Script from 'next/script';
+import { useEffect, useRef, useState } from 'react';
+import { db } from '../utils/firebase';
+import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
+import YoutubePlayer from '../components/YoutubePlayer';
+import Carousel from '../components/Carousel';
 
-const ROOMS = ["1", "2", "3"];
+const GROUP_WINDOW_MS = 30000;
+const DUAL_KEEP_MS = 60000;
 
-/* ========== ESTILOS ========== */
-const styles = {
-  card: {
-    background: "#111827",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 20,
-    overflow: "hidden",
-  },
-  header: {
-    background: "linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%)",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    padding: "20px 24px",
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    background: "#22c55e",
-    borderRadius: 12,
-    display: "grid",
-    placeItems: "center",
-    fontSize: 24,
-    boxShadow: "0 4px 20px rgba(34, 197, 94, 0.3)",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 800,
-    margin: 0,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "#94a3b8",
-    marginTop: 2,
-  },
-  body: {
-    padding: 24,
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-  },
-  inputGroup: {
-    display: "grid",
-    gridTemplateColumns: "1fr auto auto",
-    gap: 12,
-  },
-  input: {
-    padding: "18px 20px",
-    background: "rgba(255,255,255,0.03)",
-    border: "2px solid rgba(255,255,255,0.12)",
-    borderRadius: 14,
-    color: "#f8fafc",
-    fontSize: 20,
-    fontWeight: 600,
-    fontFamily: "inherit",
-    transition: "all 0.2s",
-    outline: "none",
-  },
-  select: {
-    padding: "18px 20px",
-    background: "rgba(255,255,255,0.03)",
-    border: "2px solid rgba(255,255,255,0.12)",
-    borderRadius: 14,
-    color: "#f8fafc",
-    fontSize: 16,
-    fontWeight: 600,
-    fontFamily: "inherit",
-    cursor: "pointer",
-    minWidth: 170,
-  },
-  btnCall: {
-    padding: "18px 36px",
-    background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
-    border: "none",
-    borderRadius: 14,
-    color: "#052e16",
-    fontSize: 18,
-    fontWeight: 800,
-    fontFamily: "inherit",
-    cursor: "pointer",
-    transition: "all 0.2s",
-    boxShadow: "0 4px 20px rgba(34, 197, 94, 0.3)",
-    whiteSpace: "nowrap",
-  },
-  btnCallDisabled: {
-    opacity: 0.5,
-    cursor: "not-allowed",
-  },
-  tvPreview: {
-    background: "rgba(255,255,255,0.02)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 14,
-    padding: "16px 20px",
-  },
-  tvPreviewHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#94a3b8",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-  },
-  tvPreviewContent: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 16,
-  },
-  tvPreviewRow: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  tvPreviewLabel: {
-    color: "#94a3b8",
-    fontWeight: 600,
-    fontSize: 12,
-  },
-  tvPreviewValue: {
-    fontWeight: 700,
-    fontSize: 15,
-  },
-  historySection: {
-    background: "rgba(255,255,255,0.02)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 14,
-    padding: "16px 20px",
-  },
-  historyHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  historyTitle: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: "#94a3b8",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    margin: 0,
-  },
-  historyList: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-    gap: 8,
-  },
-  historyItem: {
-    display: "grid",
-    gridTemplateColumns: "1fr auto",
-    alignItems: "center",
-    gap: 12,
-    padding: "12px 14px",
-    background: "rgba(255,255,255,0.02)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 10,
-    transition: "all 0.2s",
-  },
-  historyItemInfo: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    minWidth: 0,
-  },
-  historyItemName: {
-    fontWeight: 700,
-    fontSize: 13,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  historyItemRoom: {
-    fontSize: 12,
-    color: "#94a3b8",
-    whiteSpace: "nowrap",
-  },
-  btnRecall: {
-    padding: "8px 14px",
-    background: "rgba(245, 158, 11, 0.1)",
-    border: "1px solid rgba(245, 158, 11, 0.3)",
-    borderRadius: 8,
-    color: "#f59e0b",
-    fontSize: 13,
-    fontWeight: 700,
-    fontFamily: "inherit",
-    cursor: "pointer",
-    transition: "all 0.2s",
-    whiteSpace: "nowrap",
-  },
-  clearSection: {
-    paddingTop: 16,
-    borderTop: "1px solid rgba(255,255,255,0.08)",
-  },
-  btnClear: {
-    padding: "12px 20px",
-    background: "rgba(239, 68, 68, 0.1)",
-    border: "1px solid rgba(239, 68, 68, 0.3)",
-    borderRadius: 10,
-    color: "#ef4444",
-    fontSize: 14,
-    fontWeight: 700,
-    fontFamily: "inherit",
-    cursor: "pointer",
-    transition: "all 0.2s",
-  },
-};
+function enqueueAudio(audioQueueRef, playingRef, nome, sala) {
+  if (!nome) return;
+  audioQueueRef.current.push({ nome, sala });
+  playQueue(audioQueueRef, playingRef);
+}
 
-export default function CallPanel() {
-  const [name, setName] = useState("");
-  const [room, setRoom] = useState(ROOMS[0]);
-  const [busy, setBusy] = useState(false);
-  const [list, setList] = useState([]);
+function playQueue(audioQueueRef, playingRef) {
+  if (playingRef.current) return;
+  const next = audioQueueRef.current.shift();
+  if (!next) return;
+  playingRef.current = true;
+  try {
+    if (typeof window !== 'undefined' && typeof window.tvAnnounce === 'function') {
+      window.tvAnnounce(String(next.nome || ''), next.sala != null ? String(next.sala) : '');
+    }
+  } catch {}
+  setTimeout(() => { playingRef.current = false; playQueue(audioQueueRef, playingRef); }, 4500);
+}
 
-  // Status da TV
-  const [tvHistory, setTvHistory] = useState([]);
-  const [tvForcedIdle, setTvForcedIdle] = useState(false);
-  const [tvLastCallAt, setTvLastCallAt] = useState(null);
-  const [tvAutoIdle, setTvAutoIdle] = useState(false);
-  const [tvIdleSeconds, setTvIdleSeconds] = useState(120);
+export default function TV() {
+  const [history, setHistory] = useState([]);
+  const [idleSeconds, setIdleSeconds] = useState(120);
+  const [forcedIdle, setForcedIdle] = useState(false);
+  const [lastCallAt, setLastCallAt] = useState(null);
 
-  // Restaura ultimo consultorio
+  // YouTube
+  const [videoId, setVideoId] = useState('');
+  const [ytList, setYtList] = useState([]);
+
+  // Configurações de personalização
+  const [roomFontSize, setRoomFontSize] = useState(100);
+  const [roomColor, setRoomColor] = useState('#44b2e7');
+  const [tvColors, setTvColors] = useState({
+    bg: '#0b1220',
+    panel: '#0e1626',
+    accent: '#44b2e7',
+    text: '#fefefe',
+  });
+
+  // Relogio
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 1000); return () => clearInterval(t); }, []);
+
+  const initCallsRef = useRef(false);
+  const initAnnounceRef = useRef(false);
+  const lastNonceRef = useRef('');
+  const audioQueueRef = useRef([]);
+  const playingRef = useRef(false);
+
+  // Historico
   useEffect(() => {
-    try {
-      const last = localStorage.getItem("last_consultorio");
-      if (last && ROOMS.includes(last)) setRoom(last);
-    } catch {}
-  }, []);
-
-  // Lista ultimos chamados
-  useEffect(() => {
-    const q = query(collection(db, "calls"), orderBy("timestamp", "desc"), limit(8));
-    const unsub = onSnapshot(q, (snap) => {
-      const items = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((x) => !x.test);
-      setList(items);
-    });
-    return () => unsub();
-  }, []);
-
-  // Status TV - historico
-  useEffect(() => {
-    const q = query(collection(db, "calls"), orderBy("timestamp", "desc"), limit(5));
-    const unsub = onSnapshot(q, (snap) => {
+    const qCalls = query(collection(db, 'calls'), orderBy('timestamp', 'desc'), limit(6));
+    const unsub = onSnapshot(qCalls, (snap) => {
       const raw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const filtered = raw.filter(x => !x.test);
-      setTvHistory(filtered);
-      if (filtered.length) {
-        const t = filtered[0].timestamp;
-        const ms = t && typeof t.toMillis === "function" ? t.toMillis() : (t?.seconds ? t.seconds * 1000 : null);
-        setTvLastCallAt(ms);
+      const list = raw.filter(x => !x.test);
+      setHistory(list);
+      if (list.length) {
+        const t = list[0].timestamp;
+        const ms = t && typeof t.toMillis === 'function' ? t.toMillis() : (t?.seconds ? t.seconds * 1000 : null);
+        setLastCallAt(ms);
       } else {
-        setTvLastCallAt(null);
+        setLastCallAt(null);
+      }
+      if (!initCallsRef.current) initCallsRef.current = true;
+    });
+    return () => unsub();
+  }, []);
+
+  // Gatilho de anuncio
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'config', 'announce'), (snap) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      const nonce = String(d.nonce || '');
+      if (!initAnnounceRef.current) {
+        initAnnounceRef.current = true;
+        lastNonceRef.current = nonce;
+      } else {
+        if (nonce && nonce !== lastNonceRef.current) {
+          lastNonceRef.current = nonce;
+          if (d.idle === false) setForcedIdle(false);
+          enqueueAudio(audioQueueRef, playingRef, d.nome, d.sala);
+          const row = document.querySelector('.current-call');
+          if (row) { row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash'); }
+        }
+      }
+      if (typeof d.idle === 'boolean') setForcedIdle(Boolean(d.idle));
+    });
+    return () => unsub();
+  }, []);
+
+  // Config
+  useEffect(() => {
+    let usedMain = false;
+    const unsubMain = onSnapshot(doc(db, 'config', 'main'), (snap) => {
+      if (snap.exists()) { usedMain = true; applyConfig(snap.data()); }
+    });
+    const unsubCol = onSnapshot(collection(db, 'config'), (snap) => {
+      if (!usedMain && !snap.empty) applyConfig(snap.docs[0].data());
+    });
+    function applyConfig(data) {
+      if (!data) return;
+      const cfg = {
+        announceTemplate: data.announceTemplate || 'Atenção: paciente {{nome}}. Dirija-se à sala {{salaTxt}}.',
+        duckVolume: Number.isFinite(data.duckVolume) ? Number(data.duckVolume) : 20,
+        restoreVolume: Number.isFinite(data.restoreVolume) ? Number(data.restoreVolume) : 60,
+        leadMs: Number.isFinite(data.leadMs) ? Number(data.leadMs) : 450,
+        idleSeconds: Number.isFinite(data.idleSeconds) ? Math.min(300, Math.max(60, Number(data.idleSeconds))) : 120,
+        videoId: data.videoId || '',
+        // Novas configurações
+        roomFontSize: Number.isFinite(data.roomFontSize) ? Number(data.roomFontSize) : 100,
+        roomColor: data.roomColor || '#44b2e7',
+        tvBgColor: data.tvBgColor || '#0b1220',
+        tvPanelColor: data.tvPanelColor || '#0e1626',
+        tvAccentColor: data.tvAccentColor || '#44b2e7',
+        tvTextColor: data.tvTextColor || '#fefefe',
+      };
+      
+      // Aplica cores via CSS variables
+      const root = document.documentElement;
+      root.style.setProperty('--tv-bg', cfg.tvBgColor);
+      root.style.setProperty('--tv-panel', cfg.tvPanelColor);
+      root.style.setProperty('--tv-accent', cfg.tvAccentColor);
+      root.style.setProperty('--tv-text', cfg.tvTextColor);
+      root.style.setProperty('--room-color', cfg.roomColor);
+      root.style.setProperty('--room-font-scale', cfg.roomFontSize / 100);
+      
+      setIdleSeconds(cfg.idleSeconds);
+      setVideoId(String(cfg.videoId || ''));
+      setRoomFontSize(cfg.roomFontSize);
+      setRoomColor(cfg.roomColor);
+      setTvColors({
+        bg: cfg.tvBgColor,
+        panel: cfg.tvPanelColor,
+        accent: cfg.tvAccentColor,
+        text: cfg.tvTextColor,
+      });
+      
+      if (typeof window !== 'undefined') window.tvConfig = { ...cfg };
+    }
+    return () => { unsubMain(); unsubCol(); };
+  }, []);
+
+  // Volume do YouTube
+  useEffect(() => {
+    const ref = doc(db, 'config', 'control');
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return;
+      const d = snap.data();
+      if (!Number.isFinite(d.ytVolume)) return;
+      const v = Math.max(0, Math.min(100, Math.round(d.ytVolume)));
+      try {
+        const ev = new CustomEvent('tv:ytVolume', { detail: { v } });
+        window.dispatchEvent(ev);
+      } catch {
+        try {
+          const ev = document.createEvent('CustomEvent');
+          ev.initCustomEvent('tv:ytVolume', false, false, { v });
+          window.dispatchEvent(ev);
+        } catch {}
       }
     });
     return () => unsub();
   }, []);
 
-  // Status TV - idle forcado
+  // YouTube playlist
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "config", "announce"), (snap) => {
-      if (!snap.exists()) return;
-      const d = snap.data() || {};
-      if (typeof d.idle === "boolean") setTvForcedIdle(Boolean(d.idle));
+    const q = query(collection(db, 'ytPlaylist'), orderBy('order', 'asc'));
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .map(x => String(x.videoId || '').trim())
+        .filter(Boolean);
+      setYtList(list);
     });
     return () => unsub();
   }, []);
 
-  // Status TV - tempo idle
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "config", "main"), (snap) => {
-      if (!snap.exists()) return;
-      const d = snap.data() || {};
-      if (Number.isFinite(d.idleSeconds)) {
-        setTvIdleSeconds(Math.min(300, Math.max(60, Number(d.idleSeconds))));
-      }
-    });
-    return () => unsub();
-  }, []);
+  // Derivacoes de UI
+  const withinIdle = lastCallAt ? (nowMs - lastCallAt) < idleSeconds * 1000 : false;
+  const isIdle = forcedIdle || !history.length || !withinIdle;
 
-  // Verifica auto idle
-  useEffect(() => {
-    const tick = () => {
-      if (!tvLastCallAt) { setTvAutoIdle(false); return; }
-      setTvAutoIdle(Date.now() - tvLastCallAt >= tvIdleSeconds * 1000);
-    };
-    tick();
-    const t = setInterval(tick, 5000);
-    return () => clearInterval(t);
-  }, [tvLastCallAt, tvIdleSeconds]);
-
-  const tvIsIdle = tvForcedIdle || tvAutoIdle || tvHistory.length === 0;
-  
-  // Logica para agrupar chamadas simultaneas (igual a TV)
-  const GROUP_WINDOW_MS = 30000;
-  const DUAL_KEEP_MS = 60000;
-  
   let currentGroup = [];
-  if (!tvIsIdle && tvHistory.length) {
-    const first = tvHistory[0];
+  if (!isIdle && history.length) {
+    const first = history[0];
     const firstMs = first.timestamp?.toMillis?.() || (first.timestamp?.seconds ? first.timestamp.seconds * 1000 : null);
     if (firstMs != null) {
-      const second = tvHistory[1];
+      const second = history[1];
       if (second) {
         const secondMs = second.timestamp?.toMillis?.() || (second.timestamp?.seconds ? second.timestamp.seconds * 1000 : null);
         const isPair = secondMs != null && (firstMs - secondMs) <= GROUP_WINDOW_MS;
-        const keepDual = isPair && (Date.now() - secondMs) < DUAL_KEEP_MS;
+        const keepDual = isPair && (nowMs - secondMs) < DUAL_KEEP_MS;
         currentGroup = (isPair && keepDual) ? [first, second] : [first];
       } else {
         currentGroup = [first];
       }
     }
   }
-  
-  // Texto do "Chamando agora" - mostra todos os pacientes do grupo
-  const tvNow = tvIsIdle
-    ? "- (Logo exibida)"
-    : currentGroup.length > 1
-      ? currentGroup.map(p => `${p.nome} - Cons. ${p.sala}`).join("  |  ")
-      : (currentGroup[0]?.nome ? `${currentGroup[0].nome} - Consultório ${currentGroup[0].sala}` : "-");
+  const currentIds = new Set(currentGroup.map(x => x.id));
+  const recentItems = history.filter(h => !currentIds.has(h.id)).slice(0, 2);
+  const single = currentGroup.length === 1 ? currentGroup[0] : null;
 
-  // Dispara anuncio
-  async function fireAnnounce(nome, sala, idle = false) {
-    try {
-      await setDoc(
-        doc(db, "config", "announce"),
-        {
-          nome: String(nome || ""),
-          sala: String(sala || ""),
-          idle,
-          triggeredAt: serverTimestamp(),
-          nonce: Date.now() + "-" + Math.random().toString(36).slice(2),
-        },
-        { merge: true }
-      );
-    } catch {}
-  }
-
-  // Chamar paciente
-  async function handleCall() {
-    const nome = (name || "").trim();
-    const sala = (room || "").trim();
-    if (!nome) return;
-    setBusy(true);
-    try {
-      await addDoc(collection(db, "calls"), {
-        nome,
-        sala,
-        timestamp: serverTimestamp(),
-      });
-      await fireAnnounce(nome, sala, false);
-      try { localStorage.setItem("last_consultorio", sala); } catch {}
-      setRoom(sala);
-      setName("");
-    } catch (e) {
-      alert("Erro ao chamar. Verifique permissoes de escrita.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Rechamar - CORRIGIDO: adiciona nova entrada no historico para TV atualizar
-  async function handleRecall(id) {
-    const item = list.find(x => x.id === id);
-    if (!item) return;
-    const nome = String(item.nome || "").trim();
-    const sala = String(item.sala || "").trim();
-    if (!nome) return;
-    
-    try {
-      // Adiciona nova entrada no historico para a TV atualizar o display
-      await addDoc(collection(db, "calls"), {
-        nome,
-        sala,
-        timestamp: serverTimestamp(),
-        recall: true,
-      });
-      // Dispara o anuncio de voz
-      await fireAnnounce(nome, sala, false);
-    } catch (e) {
-      alert("Erro ao rechamar.");
-    }
-  }
-
-  // Limpar historico
-  async function handleClearHistory() {
-    if (!confirm("Limpar TODO o historico de chamadas? Isso nao pode ser desfeito.")) return;
-    try {
-      const q = query(collection(db, "calls"), orderBy("timestamp", "desc"), limit(200));
-      const snaps = await getDocs(q);
-      await Promise.all(snaps.docs.map(d => deleteDoc(doc(db, "calls", d.id))));
-      await fireAnnounce("", "", true);
-      alert("Historico limpo com sucesso.");
-    } catch (e) {
-      alert("Nao foi possivel limpar (verifique permissoes).");
-    }
-  }
-
-  // Handler Enter
-  function handleKeyDown(e) {
-    if (e.key === "Enter" && name.trim()) {
-      handleCall();
-    }
-  }
+  const hasPlaylist = ytList && ytList.length > 0;
+  const hasSingleVideo = !hasPlaylist && !!videoId;
 
   return (
-    <>
-      <style>{`
-        .call-input:focus {
-          border-color: #22c55e !important;
-          background: rgba(34, 197, 94, 0.05) !important;
-          box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.3) !important;
+    <div className="tv-screen">
+      <Head>
+        <title>Chamador na TV</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+      </Head>
+
+      {/* AREA PRINCIPAL: YouTube + Carrossel */}
+      <div className="tv-main">
+        <div className="tv-video">
+          {hasPlaylist ? (
+            <YoutubePlayer playlist={ytList} />
+          ) : hasSingleVideo ? (
+            <YoutubePlayer videoId={videoId} />
+          ) : (
+            <div className="tv-placeholder">
+              <div>Configure um video no Admin</div>
+            </div>
+          )}
+        </div>
+        <div className="tv-carousel">
+          <Carousel />
+        </div>
+      </div>
+
+      {/* RODAPE: Chamadas */}
+      <div className="tv-footer">
+        <div className="called-list">
+          {recentItems.length ? (
+            recentItems.map((h, i) => (
+              <span key={i} className="called-chip">
+                {h.nome} - Consultório {h.sala}
+              </span>
+            ))
+          ) : (
+            <span className="muted">Sem chamados recentes</span>
+          )}
+        </div>
+
+        <div className={`current-call ${isIdle ? 'idle idle-full' : ''}`}>
+          {isIdle ? (
+            <img className="idle-logo" src="/logo.png" alt="Logo" />
+          ) : (
+            <>
+              <div className="label">Chamando agora</div>
+              {currentGroup.length === 2 ? (
+                <div className="now-cards cols-2">
+                  {currentGroup.map((it) => (
+                    <div key={it.id} className="now-card">
+                      <div className="now-name">{String(it.nome || '-')}</div>
+                      <div className="now-room">Consultório {String(it.sala || '')}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="now-single">
+                  <div id="current-call-name">{String(single?.nome || '-')}</div>
+                  <div className="sub">{single?.sala ? `Consultório ${String(single.sala)}` : ''}</div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <Script src="/tv-ducking.js" strategy="afterInteractive" />
+
+      {/* ===== ESTILOS RESPONSIVOS ===== */}
+      <style jsx global>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body, #__next { 
+          height: 100%; 
+          width: 100%;
+          overflow: hidden;
         }
-        .btn-call:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 30px rgba(34, 197, 94, 0.4);
+        body { 
+          font-family: system-ui, -apple-system, sans-serif;
+          background: var(--tv-bg, #0b1220);
+          color: var(--tv-text, #fefefe);
         }
-        .btn-call:active:not(:disabled) {
-          transform: translateY(0);
+
+        :root {
+          --tv-bg: #0b1220;
+          --tv-panel: #0e1626;
+          --tv-accent: #44b2e7;
+          --tv-text: #fefefe;
+          --tv-muted: #93a0b3;
+          --room-color: #44b2e7;
+          --room-font-scale: 1;
+          
+          /* Alturas responsivas baseadas em vh */
+          --footer-height: 42vh;
+          --main-height: 58vh;
+          --gap: 1.2vh;
+          --padding: 1.2vh;
         }
-        .btn-recall:hover {
-          background: rgba(245, 158, 11, 0.2) !important;
+
+        /* ===== TELA PRINCIPAL ===== */
+        .tv-screen {
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          background: var(--tv-bg);
+          overflow: hidden;
         }
-        .btn-clear:hover {
-          background: rgba(239, 68, 68, 0.2) !important;
+
+        /* ===== AREA PRINCIPAL (Video + Carrossel) ===== */
+        .tv-main {
+          flex: 1;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: var(--gap);
+          padding: var(--padding);
+          min-height: 0;
         }
-        .history-item:hover {
-          background: rgba(255,255,255,0.04) !important;
-          border-color: rgba(255,255,255,0.12) !important;
+
+        /* Video container */
+        .tv-video {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          background: #000;
+          border-radius: 12px;
+          overflow: hidden;
         }
-        .call-select option {
-          background: #1f2937;
-          color: #f8fafc;
+
+        .tv-video > * {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
         }
-        @media (max-width: 700px) {
-          .call-input-group {
-            grid-template-columns: 1fr !important;
+
+        .tv-placeholder {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          color: var(--tv-muted);
+          font-size: 2vh;
+        }
+
+        /* Carrossel - horizontal 16:9 */
+        .tv-carousel {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        /* ===== RODAPE ===== */
+        .tv-footer {
+          height: var(--footer-height);
+          background: var(--tv-panel);
+          padding: var(--padding) calc(var(--padding) * 2);
+          border-top: 2px solid rgba(255,255,255,0.08);
+          box-shadow: 0 -12px 24px rgba(0,0,0,0.35);
+          display: flex;
+          flex-direction: column;
+          gap: var(--gap);
+        }
+
+        /* Lista de chamados recentes */
+        .called-list {
+          height: 7vh;
+          min-height: 50px;
+          display: flex;
+          align-items: center;
+          gap: 1.5vw;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .called-list::-webkit-scrollbar { display: none; }
+
+        .called-chip {
+          display: inline-flex;
+          align-items: center;
+          padding: 1.2vh 2vw;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 999px;
+          font-weight: 800;
+          font-size: clamp(16px, 2.2vw, 26px);
+          color: var(--tv-text);
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        /* Area de chamada atual */
+        .current-call {
+          flex: 1;
+          border-radius: 16px;
+          position: relative;
+          overflow: hidden;
+          background: radial-gradient(120% 120% at 50% 50%, rgba(68,178,231,0.18) 0%, rgba(68,178,231,0.06) 100%);
+          outline: 2px solid rgba(68,178,231,0.55);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 2.5vh 3vw;
+        }
+
+        .current-call .label {
+          font-size: clamp(14px, 2.2vh, 22px);
+          color: var(--tv-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 900;
+          margin-bottom: 1.5vh;
+        }
+
+        /* Modo IDLE (logo) */
+        .current-call.idle.idle-full {
+          background: #ffffff;
+          outline: none;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+        }
+
+        .current-call.idle.idle-full .idle-logo {
+          max-width: 80%;
+          max-height: 90%;
+          object-fit: contain;
+          filter: drop-shadow(0 6px 16px rgba(0,0,0,0.12));
+          animation: tvFadeIn 380ms ease forwards;
+        }
+
+        /* Nome do paciente - SINGLE */
+        .now-single {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          width: 100%;
+        }
+
+        #current-call-name {
+          font-weight: 900;
+          font-size: clamp(40px, 10vh, 100px);
+          line-height: 1.15;
+          color: var(--tv-text);
+          text-shadow: 0 3px 18px rgba(0,0,0,0.55);
+          word-break: break-word;
+          padding: 0 2vw;
+        }
+
+        .current-call .sub {
+          margin-top: 1.5vh;
+          font-size: calc(clamp(20px, 4vh, 36px) * var(--room-font-scale, 1));
+          font-weight: 800;
+          color: var(--room-color, var(--tv-accent));
+        }
+
+        /* Modo DUAL (2 pacientes) */
+        .now-cards {
+          display: grid;
+          gap: 2vw;
+          width: 100%;
+          height: 100%;
+        }
+        .now-cards.cols-2 {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .now-card {
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 14px;
+          padding: 2.5vh 2vw;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        }
+
+        .now-name {
+          font-size: clamp(28px, 6vh, 56px);
+          font-weight: 900;
+          line-height: 1.15;
+          text-align: center;
+        }
+
+        .now-room {
+          margin-top: 1.5vh;
+          font-size: calc(clamp(16px, 2.5vh, 24px) * var(--room-font-scale, 1));
+          font-weight: 700;
+          color: var(--room-color, var(--tv-accent));
+        }
+
+        /* Animacoes */
+        @keyframes tvFadeIn {
+          from { opacity: 0; transform: scale(0.98); }
+          to { opacity: 1; transform: none; }
+        }
+
+        @keyframes flashGlow {
+          0% { box-shadow: 0 0 0 0 rgba(68,178,231,0.9); }
+          70% { box-shadow: 0 0 24px 16px rgba(68,178,231,0.0); }
+          100% { box-shadow: 0 0 0 0 rgba(68,178,231,0.0); }
+        }
+
+        @keyframes beacon {
+          0%, 100% { filter: drop-shadow(0 0 0 rgba(68,178,231,0)); }
+          50% { filter: drop-shadow(0 0 18px rgba(68,178,231,0.9)); }
+        }
+
+        .current-call.flash {
+          animation: flashGlow 1.1s ease-out 2;
+        }
+
+        .current-call.flash #current-call-name {
+          animation: beacon 1.1s ease-out 2;
+        }
+
+        /* Util */
+        .muted { color: var(--tv-muted); }
+
+        /* ===== RESPONSIVIDADE PARA DIFERENTES TELAS ===== */
+        
+        /* TV Vertical / Portrait */
+        @media (orientation: portrait) {
+          .tv-main {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr 1fr;
           }
-          .tv-preview-content {
-            grid-template-columns: 1fr !important;
+          
+          :root {
+            --footer-height: 35vh;
+          }
+        }
+
+        /* Telas pequenas (tablets, monitores pequenos) */
+        @media (max-height: 600px) {
+          :root {
+            --footer-height: 45vh;
+            --padding: 1vh;
+            --gap: 1vh;
+          }
+          
+          #current-call-name {
+            font-size: clamp(28px, 8vh, 56px);
+          }
+          
+          .current-call .sub {
+            font-size: clamp(16px, 3vh, 24px);
+          }
+        }
+
+        /* Fire TV Stick / TV Box */
+        @media (min-width: 1280px) and (min-height: 720px) {
+          :root {
+            --footer-height: 40vh;
+          }
+        }
+
+        /* 4K TVs */
+        @media (min-width: 3000px) {
+          :root {
+            --footer-height: 38vh;
+            --padding: 1.5vh;
           }
         }
       `}</style>
-
-      <section style={styles.card}>
-        {/* Header */}
-        <div style={styles.header}>
-          <div style={styles.headerIcon}>📢</div>
-          <div>
-            <h2 style={styles.headerTitle}>Chamar Paciente</h2>
-            <p style={styles.headerSubtitle}>Digite o nome e selecione o consultorio</p>
-          </div>
-        </div>
-
-        <div style={styles.body}>
-          {/* Input de chamada */}
-          <div style={styles.inputGroup} className="call-input-group">
-            <input
-              type="text"
-              placeholder="Nome do paciente"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={styles.input}
-              className="call-input"
-            />
-            <select
-              value={room}
-              onChange={(e) => setRoom(e.target.value)}
-              style={styles.select}
-              className="call-select"
-            >
-              {ROOMS.map(r => (
-                <option key={r} value={r}>Consultório {r}</option>
-              ))}
-            </select>
-            <button
-              onClick={handleCall}
-              disabled={busy || !name.trim()}
-              style={{
-                ...styles.btnCall,
-                ...(busy || !name.trim() ? styles.btnCallDisabled : {}),
-              }}
-              className="btn-call"
-            >
-              {busy ? "Chamando..." : "Chamar Paciente"}
-            </button>
-          </div>
-
-          {/* Status na TV */}
-          <div style={styles.tvPreview}>
-            <div style={styles.tvPreviewHeader}>
-              <span>📺</span> Status na TV
-            </div>
-            <div style={styles.tvPreviewRow}>
-              <span style={styles.tvPreviewLabel}>Chamando agora:</span>
-              <span style={{...styles.tvPreviewValue, marginTop: 4}}>{tvNow}</span>
-            </div>
-          </div>
-
-          {/* Historico */}
-          <div style={styles.historySection}>
-            <div style={styles.historyHeader}>
-              <h3 style={styles.historyTitle}>Ultimos chamados</h3>
-            </div>
-            <div style={styles.historyList}>
-              {list.length ? list.map((it) => (
-                <div key={it.id} style={styles.historyItem} className="history-item">
-                  <div style={styles.historyItemInfo}>
-                    <span style={styles.historyItemName}>{it.nome}</span>
-                    <span style={styles.historyItemRoom}>Consultório {it.sala}</span>
-                  </div>
-                  <button
-                    onClick={() => handleRecall(it.id)}
-                    style={styles.btnRecall}
-                    className="btn-recall"
-                  >
-                    Rechamar
-                  </button>
-                </div>
-              )) : (
-                <div style={{ opacity: 0.7, fontSize: 14 }}>Ainda nao ha chamados.</div>
-              )}
-            </div>
-          </div>
-
-          {/* Limpar historico */}
-          <div style={styles.clearSection}>
-            <button
-              onClick={handleClearHistory}
-              style={styles.btnClear}
-              className="btn-clear"
-            >
-              🗑️ Limpar Historico
-            </button>
-          </div>
-        </div>
-      </section>
-    </>
+    </div>
   );
 }
