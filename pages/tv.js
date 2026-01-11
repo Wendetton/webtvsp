@@ -215,7 +215,7 @@ export default function TV() {
           {recentItems.length ? (
             recentItems.map((h, i) => (
               <span key={i} className="called-chip">
-                {h.nome} - Consultorio {h.sala}
+                {h.nome} - Consultório {h.sala}
               </span>
             ))
           ) : (
@@ -234,14 +234,14 @@ export default function TV() {
                   {currentGroup.map((it) => (
                     <div key={it.id} className="now-card">
                       <div className="now-name">{String(it.nome || '-')}</div>
-                      <div className="now-room">Consultorio {String(it.sala || '')}</div>
+                      <div className="now-room">Consultório {String(it.sala || '')}</div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="now-single">
                   <div id="current-call-name">{String(single?.nome || '-')}</div>
-                  <div className="sub">{single?.sala ? `Consultorio ${String(single.sala)}` : ''}</div>
+                  <div className="sub">{single?.sala ? `Consultório ${String(single.sala)}` : ''}</div>
                 </div>
               )}
             </>
@@ -273,8 +273,8 @@ export default function TV() {
           --tv-muted: #93a0b3;
           
           /* Alturas responsivas baseadas em vh */
-          --footer-height: 38vh;
-          --main-height: 62vh;
+          --footer-height: 42vh;
+          --main-height: 58vh;
           --gap: 1.2vh;
           --padding: 1.2vh;
         }
@@ -293,13 +293,13 @@ export default function TV() {
         .tv-main {
           flex: 1;
           display: grid;
-          grid-template-columns: 1fr minmax(20vw, 25vw);
+          grid-template-columns: 1fr 1fr;
           gap: var(--gap);
           padding: var(--padding);
-          min-height: 0; /* Importante para flex funcionar */
+          min-height: 0;
         }
 
-        /* Video container - mantem proporcao 16:9 */
+        /* Video container */
         .tv-video {
           position: relative;
           width: 100%;
@@ -326,7 +326,7 @@ export default function TV() {
           font-size: 2vh;
         }
 
-        /* Carrossel */
+        /* Carrossel - horizontal 16:9 */
         .tv-carousel {
           position: relative;
           width: 100%;
@@ -407,8 +407,8 @@ export default function TV() {
         }
 
         .current-call.idle.idle-full .idle-logo {
-          max-width: 60%;
-          max-height: 80%;
+          max-width: 80%;
+          max-height: 90%;
           object-fit: contain;
           filter: drop-shadow(0 6px 16px rgba(0,0,0,0.12));
           animation: tvFadeIn 380ms ease forwards;
@@ -512,18 +512,18 @@ export default function TV() {
         @media (orientation: portrait) {
           .tv-main {
             grid-template-columns: 1fr;
-            grid-template-rows: 1fr 35vh;
+            grid-template-rows: 1fr 1fr;
           }
           
           :root {
-            --footer-height: 30vh;
+            --footer-height: 35vh;
           }
         }
 
         /* Telas pequenas (tablets, monitores pequenos) */
         @media (max-height: 600px) {
           :root {
-            --footer-height: 40vh;
+            --footer-height: 45vh;
             --padding: 1vh;
             --gap: 1vh;
           }
@@ -540,14 +540,14 @@ export default function TV() {
         /* Fire TV Stick / TV Box */
         @media (min-width: 1280px) and (min-height: 720px) {
           :root {
-            --footer-height: 36vh;
+            --footer-height: 40vh;
           }
         }
 
         /* 4K TVs */
         @media (min-width: 3000px) {
           :root {
-            --footer-height: 35vh;
+            --footer-height: 38vh;
             --padding: 1.5vh;
           }
         }
