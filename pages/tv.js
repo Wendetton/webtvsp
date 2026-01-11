@@ -10,10 +10,6 @@ import Carousel from '../components/Carousel';
 const GROUP_WINDOW_MS = 30000;
 const DUAL_KEEP_MS = 60000;
 
-function applyAccent(color) {
-  try { document.documentElement.style.setProperty('--tv-accent', color || '#44b2e7'); } catch {}
-}
-
 function enqueueAudio(audioQueueRef, playingRef, nome, sala) {
   if (!nome) return;
   audioQueueRef.current.push({ nome, sala });
@@ -42,6 +38,16 @@ export default function TV() {
   // YouTube
   const [videoId, setVideoId] = useState('');
   const [ytList, setYtList] = useState([]);
+
+  // Configurações de personalização
+  const [roomFontSize, setRoomFontSize] = useState(100);
+  const [roomColor, setRoomColor] = useState('#44b2e7');
+  const [tvColors, setTvColors] = useState({
+    bg: '#0b1220',
+    panel: '#0e1626',
+    accent: '#44b2e7',
+    text: '#fefefe',
+  });
 
   // Relogio
   const [nowMs, setNowMs] = useState(Date.now());
@@ -107,17 +113,41 @@ export default function TV() {
     function applyConfig(data) {
       if (!data) return;
       const cfg = {
-        announceTemplate: data.announceTemplate || 'Atencao: paciente {{nome}}. Dirija-se a sala {{salaTxt}}.',
+        announceTemplate: data.announceTemplate || 'Atenção: paciente {{nome}}. Dirija-se à sala {{salaTxt}}.',
         duckVolume: Number.isFinite(data.duckVolume) ? Number(data.duckVolume) : 20,
         restoreVolume: Number.isFinite(data.restoreVolume) ? Number(data.restoreVolume) : 60,
         leadMs: Number.isFinite(data.leadMs) ? Number(data.leadMs) : 450,
-        accentColor: data.accentColor || '#44b2e7',
         idleSeconds: Number.isFinite(data.idleSeconds) ? Math.min(300, Math.max(60, Number(data.idleSeconds))) : 120,
         videoId: data.videoId || '',
+        // Novas configurações
+        roomFontSize: Number.isFinite(data.roomFontSize) ? Number(data.roomFontSize) : 100,
+        roomColor: data.roomColor || '#44b2e7',
+        tvBgColor: data.tvBgColor || '#0b1220',
+        tvPanelColor: data.tvPanelColor || '#0e1626',
+        tvAccentColor: data.tvAccentColor || '#44b2e7',
+        tvTextColor: data.tvTextColor || '#fefefe',
       };
-      applyAccent(cfg.accentColor);
+      
+      // Aplica cores via CSS variables
+      const root = document.documentElement;
+      root.style.setProperty('--tv-bg', cfg.tvBgColor);
+      root.style.setProperty('--tv-panel', cfg.tvPanelColor);
+      root.style.setProperty('--tv-accent', cfg.tvAccentColor);
+      root.style.setProperty('--tv-text', cfg.tvTextColor);
+      root.style.setProperty('--room-color', cfg.roomColor);
+      root.style.setProperty('--room-font-scale', cfg.roomFontSize / 100);
+      
       setIdleSeconds(cfg.idleSeconds);
       setVideoId(String(cfg.videoId || ''));
+      setRoomFontSize(cfg.roomFontSize);
+      setRoomColor(cfg.roomColor);
+      setTvColors({
+        bg: cfg.tvBgColor,
+        panel: cfg.tvPanelColor,
+        accent: cfg.tvAccentColor,
+        text: cfg.tvTextColor,
+      });
+      
       if (typeof window !== 'undefined') window.tvConfig = { ...cfg };
     }
     return () => { unsubMain(); unsubCol(); };
@@ -261,8 +291,8 @@ export default function TV() {
         }
         body { 
           font-family: system-ui, -apple-system, sans-serif;
-          background: #0b1220;
-          color: #fefefe;
+          background: var(--tv-bg, #0b1220);
+          color: var(--tv-text, #fefefe);
         }
 
         :root {
@@ -271,6 +301,8 @@ export default function TV() {
           --tv-accent: #44b2e7;
           --tv-text: #fefefe;
           --tv-muted: #93a0b3;
+          --room-color: #44b2e7;
+          --room-font-scale: 1;
           
           /* Alturas responsivas baseadas em vh */
           --footer-height: 42vh;
@@ -436,9 +468,9 @@ export default function TV() {
 
         .current-call .sub {
           margin-top: 1.5vh;
-          font-size: clamp(20px, 4vh, 36px);
+          font-size: calc(clamp(20px, 4vh, 36px) * var(--room-font-scale, 1));
           font-weight: 800;
-          color: var(--tv-accent);
+          color: var(--room-color, var(--tv-accent));
         }
 
         /* Modo DUAL (2 pacientes) */
@@ -473,9 +505,9 @@ export default function TV() {
 
         .now-room {
           margin-top: 1.5vh;
-          font-size: clamp(16px, 2.5vh, 24px);
-          opacity: 0.9;
+          font-size: calc(clamp(16px, 2.5vh, 24px) * var(--room-font-scale, 1));
           font-weight: 700;
+          color: var(--room-color, var(--tv-accent));
         }
 
         /* Animacoes */
