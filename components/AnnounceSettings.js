@@ -3,6 +3,15 @@ import { useEffect, useState } from 'react';
 import { db } from '../utils/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
+// Cores padrão baseadas na logo São Peregrino
+const DEFAULT_COLORS = {
+  bg: '#0a1a14',        // Fundo escuro com tom verde
+  panel: '#0d2118',     // Painel escuro esverdeado
+  accent: '#5cb85c',    // Verde claro da logo
+  text: '#fefefe',      // Texto branco
+  room: '#2d5a3d',      // Verde escuro da logo para consultório
+};
+
 export default function AnnounceSettings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -13,16 +22,16 @@ export default function AnnounceSettings() {
 
   // Personalização do Consultório
   const [roomFontSize, setRoomFontSize] = useState(100);
-  const [roomColor, setRoomColor] = useState('#44b2e7');
+  const [roomColor, setRoomColor] = useState(DEFAULT_COLORS.room);
 
   // Tempo do carrossel
   const [carouselDuration, setCarouselDuration] = useState(7);
 
   // Cores do layout da TV
-  const [tvBgColor, setTvBgColor] = useState('#0b1220');
-  const [tvPanelColor, setTvPanelColor] = useState('#0e1626');
-  const [tvAccentColor, setTvAccentColor] = useState('#44b2e7');
-  const [tvTextColor, setTvTextColor] = useState('#fefefe');
+  const [tvBgColor, setTvBgColor] = useState(DEFAULT_COLORS.bg);
+  const [tvPanelColor, setTvPanelColor] = useState(DEFAULT_COLORS.panel);
+  const [tvAccentColor, setTvAccentColor] = useState(DEFAULT_COLORS.accent);
+  const [tvTextColor, setTvTextColor] = useState(DEFAULT_COLORS.text);
 
   // Carregar config/main
   useEffect(() => {
@@ -73,11 +82,11 @@ export default function AnnounceSettings() {
   }
 
   function resetColors() {
-    setTvBgColor('#0b1220');
-    setTvPanelColor('#0e1626');
-    setTvAccentColor('#44b2e7');
-    setTvTextColor('#fefefe');
-    setRoomColor('#44b2e7');
+    setTvBgColor(DEFAULT_COLORS.bg);
+    setTvPanelColor(DEFAULT_COLORS.panel);
+    setTvAccentColor(DEFAULT_COLORS.accent);
+    setTvTextColor(DEFAULT_COLORS.text);
+    setRoomColor(DEFAULT_COLORS.room);
   }
 
   return (
@@ -323,10 +332,10 @@ export default function AnnounceSettings() {
             disabled={saving}
             style={{
               padding: '14px 28px',
-              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+              background: 'linear-gradient(135deg, #5cb85c 0%, #2d5a3d 100%)',
               border: 'none',
               borderRadius: 12,
-              color: '#052e16',
+              color: '#ffffff',
               fontSize: 16,
               fontWeight: 800,
               fontFamily: 'inherit',
@@ -335,7 +344,7 @@ export default function AnnounceSettings() {
           >
             {saving ? 'Salvando...' : 'Salvar Configurações'}
           </button>
-          {saved && <span style={{ marginLeft: 12, color: '#4ade80', fontWeight: 700, fontSize: 14 }}>✓ Salvo!</span>}
+          {saved && <span style={{ marginLeft: 12, color: '#5cb85c', fontWeight: 700, fontSize: 14 }}>✓ Salvo!</span>}
         </div>
       </div>
     </div>
