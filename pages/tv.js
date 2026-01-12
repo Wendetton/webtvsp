@@ -1,4 +1,4 @@
-// pages/tv.js - Layout 100% responsivo + Autoplay garantido
+// pages/tv.js - Layout 100% responsivo + Cores São Peregrino
 import Head from 'next/head';
 import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
@@ -9,6 +9,15 @@ import Carousel from '../components/Carousel';
 
 const GROUP_WINDOW_MS = 30000;
 const DUAL_KEEP_MS = 60000;
+
+// Cores padrão baseadas na logo São Peregrino
+const DEFAULT_COLORS = {
+  bg: '#0a1a14',        // Fundo escuro com tom verde
+  panel: '#0d2118',     // Painel escuro esverdeado
+  accent: '#5cb85c',    // Verde claro da logo
+  text: '#fefefe',      // Texto branco
+  room: '#2d5a3d',      // Verde escuro da logo para consultório
+};
 
 function enqueueAudio(audioQueueRef, playingRef, nome, sala) {
   if (!nome) return;
@@ -41,13 +50,7 @@ export default function TV() {
 
   // Configurações de personalização
   const [roomFontSize, setRoomFontSize] = useState(100);
-  const [roomColor, setRoomColor] = useState('#44b2e7');
-  const [tvColors, setTvColors] = useState({
-    bg: '#0b1220',
-    panel: '#0e1626',
-    accent: '#44b2e7',
-    text: '#fefefe',
-  });
+  const [roomColor, setRoomColor] = useState(DEFAULT_COLORS.room);
 
   // Relogio
   const [nowMs, setNowMs] = useState(Date.now());
@@ -119,13 +122,13 @@ export default function TV() {
         leadMs: Number.isFinite(data.leadMs) ? Number(data.leadMs) : 450,
         idleSeconds: Number.isFinite(data.idleSeconds) ? Math.min(300, Math.max(60, Number(data.idleSeconds))) : 120,
         videoId: data.videoId || '',
-        // Novas configurações
+        // Novas configurações com cores padrão São Peregrino
         roomFontSize: Number.isFinite(data.roomFontSize) ? Number(data.roomFontSize) : 100,
-        roomColor: data.roomColor || '#44b2e7',
-        tvBgColor: data.tvBgColor || '#0b1220',
-        tvPanelColor: data.tvPanelColor || '#0e1626',
-        tvAccentColor: data.tvAccentColor || '#44b2e7',
-        tvTextColor: data.tvTextColor || '#fefefe',
+        roomColor: data.roomColor || DEFAULT_COLORS.room,
+        tvBgColor: data.tvBgColor || DEFAULT_COLORS.bg,
+        tvPanelColor: data.tvPanelColor || DEFAULT_COLORS.panel,
+        tvAccentColor: data.tvAccentColor || DEFAULT_COLORS.accent,
+        tvTextColor: data.tvTextColor || DEFAULT_COLORS.text,
       };
       
       // Aplica cores via CSS variables
@@ -135,18 +138,15 @@ export default function TV() {
       root.style.setProperty('--tv-accent', cfg.tvAccentColor);
       root.style.setProperty('--tv-text', cfg.tvTextColor);
       root.style.setProperty('--room-color', cfg.roomColor);
-      root.style.setProperty('--room-font-scale', cfg.roomFontSize / 100);
+      
+      // Aplica tamanho da fonte do consultório
+      const fontScale = cfg.roomFontSize / 100;
+      root.style.setProperty('--room-font-scale', String(fontScale));
       
       setIdleSeconds(cfg.idleSeconds);
       setVideoId(String(cfg.videoId || ''));
       setRoomFontSize(cfg.roomFontSize);
       setRoomColor(cfg.roomColor);
-      setTvColors({
-        bg: cfg.tvBgColor,
-        panel: cfg.tvPanelColor,
-        accent: cfg.tvAccentColor,
-        text: cfg.tvTextColor,
-      });
       
       if (typeof window !== 'undefined') window.tvConfig = { ...cfg };
     }
@@ -230,7 +230,7 @@ export default function TV() {
             <YoutubePlayer videoId={videoId} />
           ) : (
             <div className="tv-placeholder">
-              <div>Configure um video no Admin</div>
+              <div>Configure um vídeo no Admin</div>
             </div>
           )}
         </div>
@@ -245,40 +245,38 @@ export default function TV() {
           {recentItems.length ? (
             recentItems.map((h, i) => (
               <span key={i} className="called-chip">
-                {h.nome} - Consultório {h.sala}
+                {h.nome} <span className="muted">• Cons. {h.sala}</span>
               </span>
             ))
-          ) : (
-            <span className="muted">Sem chamados recentes</span>
-          )}
+          ) : null}
         </div>
 
         <div className={`current-call ${isIdle ? 'idle idle-full' : ''}`}>
           {isIdle ? (
-            <img className="idle-logo" src="/logo.png" alt="Logo" />
-          ) : (
+            <img src="/logo.png" alt="Logo" className="idle-logo" />
+          ) : currentGroup.length > 1 ? (
             <>
               <div className="label">Chamando agora</div>
-              {currentGroup.length === 2 ? (
-                <div className="now-cards cols-2">
-                  {currentGroup.map((it) => (
-                    <div key={it.id} className="now-card">
-                      <div className="now-name">{String(it.nome || '-')}</div>
-                      <div className="now-room">Consultório {String(it.sala || '')}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="now-single">
-                  <div id="current-call-name">{String(single?.nome || '-')}</div>
-                  <div className="sub">{single?.sala ? `Consultório ${String(single.sala)}` : ''}</div>
-                </div>
-              )}
+              <div className="now-cards cols-2">
+                {currentGroup.map((p, i) => (
+                  <div key={i} className="now-card">
+                    <div className="now-name">{p.nome}</div>
+                    <div className="now-room">Consultório {p.sala}</div>
+                  </div>
+                ))}
+              </div>
             </>
-          )}
+          ) : single ? (
+            <div className="now-single">
+              <div className="label">Chamando agora</div>
+              <div id="current-call-name">{single.nome}</div>
+              <div className="sub">Consultório {single.sala}</div>
+            </div>
+          ) : null}
         </div>
       </div>
 
+      {/* Script de voz */}
       <Script src="/tv-ducking.js" strategy="afterInteractive" />
 
       {/* ===== ESTILOS RESPONSIVOS ===== */}
@@ -291,17 +289,17 @@ export default function TV() {
         }
         body { 
           font-family: system-ui, -apple-system, sans-serif;
-          background: var(--tv-bg, #0b1220);
-          color: var(--tv-text, #fefefe);
+          background: var(--tv-bg, ${DEFAULT_COLORS.bg});
+          color: var(--tv-text, ${DEFAULT_COLORS.text});
         }
 
         :root {
-          --tv-bg: #0b1220;
-          --tv-panel: #0e1626;
-          --tv-accent: #44b2e7;
-          --tv-text: #fefefe;
+          --tv-bg: ${DEFAULT_COLORS.bg};
+          --tv-panel: ${DEFAULT_COLORS.panel};
+          --tv-accent: ${DEFAULT_COLORS.accent};
+          --tv-text: ${DEFAULT_COLORS.text};
           --tv-muted: #93a0b3;
-          --room-color: #44b2e7;
+          --room-color: ${DEFAULT_COLORS.room};
           --room-font-scale: 1;
           
           /* Alturas responsivas baseadas em vh */
@@ -374,7 +372,7 @@ export default function TV() {
           height: var(--footer-height);
           background: var(--tv-panel);
           padding: var(--padding) calc(var(--padding) * 2);
-          border-top: 2px solid rgba(255,255,255,0.08);
+          border-top: 2px solid var(--tv-accent);
           box-shadow: 0 -12px 24px rgba(0,0,0,0.35);
           display: flex;
           flex-direction: column;
@@ -413,8 +411,8 @@ export default function TV() {
           border-radius: 16px;
           position: relative;
           overflow: hidden;
-          background: radial-gradient(120% 120% at 50% 50%, rgba(68,178,231,0.18) 0%, rgba(68,178,231,0.06) 100%);
-          outline: 2px solid rgba(68,178,231,0.55);
+          background: radial-gradient(120% 120% at 50% 50%, rgba(92,184,92,0.18) 0%, rgba(92,184,92,0.06) 100%);
+          outline: 2px solid var(--tv-accent);
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -431,18 +429,18 @@ export default function TV() {
           margin-bottom: 1.5vh;
         }
 
-        /* Modo IDLE (logo) */
+        /* Modo IDLE (logo) - AUMENTADA */
         .current-call.idle.idle-full {
-          background: #ffffff;
+          background: #f5f5f5;
           outline: none;
           box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
         }
 
         .current-call.idle.idle-full .idle-logo {
-          max-width: 80%;
-          max-height: 90%;
+          max-width: 90%;
+          max-height: 95%;
           object-fit: contain;
-          filter: drop-shadow(0 6px 16px rgba(0,0,0,0.12));
+          filter: drop-shadow(0 8px 24px rgba(0,0,0,0.15));
           animation: tvFadeIn 380ms ease forwards;
         }
 
@@ -517,14 +515,14 @@ export default function TV() {
         }
 
         @keyframes flashGlow {
-          0% { box-shadow: 0 0 0 0 rgba(68,178,231,0.9); }
-          70% { box-shadow: 0 0 24px 16px rgba(68,178,231,0.0); }
-          100% { box-shadow: 0 0 0 0 rgba(68,178,231,0.0); }
+          0% { box-shadow: 0 0 0 0 rgba(92,184,92,0.9); }
+          70% { box-shadow: 0 0 24px 16px rgba(92,184,92,0.0); }
+          100% { box-shadow: 0 0 0 0 rgba(92,184,92,0.0); }
         }
 
         @keyframes beacon {
-          0%, 100% { filter: drop-shadow(0 0 0 rgba(68,178,231,0)); }
-          50% { filter: drop-shadow(0 0 18px rgba(68,178,231,0.9)); }
+          0%, 100% { filter: drop-shadow(0 0 0 rgba(92,184,92,0)); }
+          50% { filter: drop-shadow(0 0 18px rgba(92,184,92,0.9)); }
         }
 
         .current-call.flash {
