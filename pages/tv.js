@@ -417,7 +417,7 @@ export default function TV() {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 2.5vh 3vw;
+          padding: 0;
         }
 
         .current-call .label {
