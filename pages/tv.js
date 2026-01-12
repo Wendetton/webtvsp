@@ -439,7 +439,7 @@ export default function TV() {
         .current-call.idle.idle-full .idle-logo {
           width: 100%;
           height: 100%;
-          transform: scale(1.5);
+          transform: scale(2.0);
           object-fit: contain;
           filter: drop-shadow(0 8px 24px rgba(0,0,0,0.15));
           animation: tvFadeIn 380ms ease forwards;
