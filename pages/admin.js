@@ -1,4 +1,4 @@
-// pages/admin.js - Layout Redesenhado com VideoManager
+// pages/admin.js - Layout Redesenhado (apenas YouTube)
 import { useEffect, useState, useRef } from "react";
 import { db } from "../utils/firebase";
 import {
@@ -8,7 +8,6 @@ import {
 import CallPanel from "../components/CallPanel";
 import CarouselManager from '../components/CarouselManager';
 import YoutubePlaylistManager from '../components/YoutubePlaylistManager';
-import VideoManager from '../components/VideoManager';
 import AnnounceSettings from "../components/AnnounceSettings";
 
 /* ========== ESTILOS ========== */
@@ -107,38 +106,10 @@ const styles = {
     gap: 24,
   },
   
-  // Seção de mídia - 2 colunas principais
-  mediaGrid: {
+  mediaSection: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "1fr 1fr 1fr",
     gap: 20,
-  },
-  
-  // Coluna com 2 cards empilhados
-  mediaColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-  },
-  
-  mediaCard: {
-    background: "#111827",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  mediaHeader: {
-    padding: "14px 18px",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.02)",
-    fontSize: 14,
-    fontWeight: 700,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  mediaBody: {
-    padding: "16px 18px",
   },
   
   modalOverlay: {
@@ -206,7 +177,7 @@ const styles = {
   },
 };
 
-/* ========== COMPONENTE: Volume do YouTube (legado) ========== */
+/* ========== COMPONENTE: Controle de Volume do YouTube ========== */
 function YTLiveVolume() {
   const [val, setVal] = useState(60);
   const [saving, setSaving] = useState(false);
@@ -238,11 +209,25 @@ function YTLiveVolume() {
   }
 
   return (
-    <div style={styles.mediaCard}>
-      <div style={styles.mediaHeader}>
+    <div style={{
+      background: "#111827",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 16,
+      overflow: "hidden",
+    }}>
+      <div style={{
+        padding: "14px 18px",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        background: "rgba(255,255,255,0.02)",
+        fontSize: 14,
+        fontWeight: 700,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}>
         <span>🔊</span> Volume do YouTube
       </div>
-      <div style={styles.mediaBody}>
+      <div style={{ padding: "16px 18px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <input
             type="range"
@@ -264,7 +249,7 @@ function YTLiveVolume() {
           </span>
         </div>
         <p style={{ marginTop: 12, fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>
-          Controle do volume para vídeos do YouTube (se estiver usando).
+          Ajuste o volume dos vídeos do YouTube na TV.
           {saving && <span style={{ marginLeft: 8, color: "#22c55e" }}>Salvando...</span>}
         </p>
       </div>
@@ -301,8 +286,8 @@ export default function Admin() {
         }
         
         /* Responsividade */
-        @media (max-width: 1000px) {
-          .media-grid {
+        @media (max-width: 900px) {
+          .media-section {
             grid-template-columns: 1fr !important;
           }
         }
@@ -349,20 +334,12 @@ export default function Admin() {
         {/* Seção de Chamadas (topo - destaque) */}
         <CallPanel />
 
-        {/* Seção de Mídia - 2 colunas */}
-        <div style={styles.mediaGrid} className="media-grid">
-          {/* Coluna Esquerda: Player de Vídeos + YouTube */}
-          <div style={styles.mediaColumn}>
-            <VideoManager />
-            <YoutubePlaylistManager />
-            <YTLiveVolume />
-          </div>
-          
-          {/* Coluna Direita: Carrossel */}
-          <div style={styles.mediaColumn}>
-            <CarouselManager />
-          </div>
-        </div>
+        {/* Seção de Mídia (inferior - 3 colunas) */}
+        <section style={styles.mediaSection} className="media-section">
+          <YoutubePlaylistManager />
+          <YTLiveVolume />
+          <CarouselManager />
+        </section>
       </main>
 
       {/* ===== MODAL DE CONFIGURAÇÕES ===== */}
