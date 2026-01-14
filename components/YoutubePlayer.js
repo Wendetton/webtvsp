@@ -11,6 +11,21 @@ export default function YoutubePlayer({ videoId, playlist = [] }) {
 
   useEffect(() => { playlistRef.current = playlist; }, [playlist]);
 
+  // Força qualidade baixa (YouTube pode ignorar dependendo do contexto/dispositivo)
+  const enforceLowQuality = (player) => {
+    try {
+      if (!player) return;
+
+      // Tenta travar em "small" (geralmente ~240p)
+      if (typeof player.setPlaybackQualityRange === 'function') {
+        player.setPlaybackQualityRange('small', 'small');
+      }
+      if (typeof player.setPlaybackQuality === 'function') {
+        player.setPlaybackQuality('small');
+      }
+    } catch {}
+  };
+
   // Carrega a API e cria o player
   useEffect(() => {
     function create() {
@@ -31,22 +46,50 @@ export default function YoutubePlayer({ videoId, playlist = [] }) {
           iv_load_policy: 3,
           mute: 0,
           playsinline: 1,
+
+          // ✅ tenta iniciar em baixa qualidade
+          // Observação: o YouTube pode ajustar automaticamente mesmo assim,
+          // por isso reforçamos também via API nos eventos.
+          vq: 'small',
+
           // Dica: para loopar playlist via playerVars, é bom informar "playlist"
           ...(playlist && playlist.length > 0 ? { loop: 1, playlist: playlist.join(',') } : {}),
         },
         events: {
           onReady: (ev) => {
             readyRef.current = true;
-                     try {
-                const init = (window.tvConfig && Number.isFinite(window.tvConfig.restoreVolume))
-                  ? window.tvConfig.restoreVolume : 60;
-                ev.target.unMute?.();
-                ev.target.setVolume?.(init);
-              } catch {}
-            },
+
+            // volume original
+            try {
+              const init = (window.tvConfig && Number.isFinite(window.tvConfig.restoreVolume))
+                ? window.tvConfig.restoreVolume : 60;
+              ev.target.unMute?.();
+              ev.target.setVolume?.(init);
+            } catch {}
+
+            // ✅ aplica baixa qualidade assim que o player fica pronto
+            enforceLowQuality(ev.target);
+          },
+
+          // ✅ se o YouTube tentar mudar qualidade, tentamos voltar pra "small"
+          onPlaybackQualityChange: (ev) => {
+            try {
+              // ev.data costuma ser string ("small", "medium", "hd720"...)
+              if (ev?.data && ev.data !== 'small') {
+                enforceLowQuality(ev.target);
+              }
+            } catch {}
+          },
+
           onStateChange: (ev) => {
             const YT = window.YT;
             if (!YT) return;
+
+            // ✅ quando começa a tocar, reforça a qualidade (às vezes muda após play)
+            if (ev.data === YT.PlayerState.PLAYING) {
+              enforceLowQuality(ev.target);
+            }
+
             // Se for vídeo único (sem playlist), loop simples
             if (ev.data === YT.PlayerState.ENDED && (!playlistRef.current || playlistRef.current.length === 0)) {
               try { ev.target.seekTo(0); ev.target.playVideo(); } catch {}
@@ -70,7 +113,7 @@ export default function YoutubePlayer({ videoId, playlist = [] }) {
       playerRef.current = null;
       readyRef.current = false;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Troca de vídeo único
@@ -78,34 +121,44 @@ export default function YoutubePlayer({ videoId, playlist = [] }) {
     if (!readyRef.current || !playerRef.current) return;
     if (playlist && playlist.length > 0) return; // playlist tem prioridade
     if (!videoId) return;
-    try { playerRef.current.loadVideoById(videoId); } catch {}
+    try {
+      playerRef.current.loadVideoById(videoId);
+      // ✅ reforça qualidade após troca
+      enforceLowQuality(playerRef.current);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, playlist]);
 
-// aplica o volume no MESMO player criado pelo componente
-useEffect(() => {
-  function setVol(v){
-    try{
-      const p = playerRef.current;
-      if (!p) return;
-      // alguns WebViews só respeitam mute/unmute no 0
-      if (v <= 0) { p.mute?.(); p.setVolume?.(0); }
-      else { p.unMute?.(); p.setVolume?.(v); }
-    } catch {}
-  }
-  function onVol(e){
-    const v = Number(e?.detail?.v);
-    if (Number.isFinite(v)) setVol(Math.max(0, Math.min(100, Math.round(v))));
-  }
-  window.addEventListener('tv:ytVolume', onVol);
-  return () => window.removeEventListener('tv:ytVolume', onVol);
-}, []);
-  
+  // aplica o volume no MESMO player criado pelo componente
+  useEffect(() => {
+    function setVol(v){
+      try{
+        const p = playerRef.current;
+        if (!p) return;
+        // alguns WebViews só respeitam mute/unmute no 0
+        if (v <= 0) { p.mute?.(); p.setVolume?.(0); }
+        else { p.unMute?.(); p.setVolume?.(v); }
+      } catch {}
+    }
+    function onVol(e){
+      const v = Number(e?.detail?.v);
+      if (Number.isFinite(v)) setVol(Math.max(0, Math.min(100, Math.round(v))));
+    }
+    window.addEventListener('tv:ytVolume', onVol);
+    return () => window.removeEventListener('tv:ytVolume', onVol);
+  }, []);
+
   // Troca de playlist
   useEffect(() => {
     if (!readyRef.current || !playerRef.current) return;
     if (playlist && playlist.length > 0) {
-      try { playerRef.current.loadPlaylist(playlist, 0, 0); } catch {}
+      try {
+        playerRef.current.loadPlaylist(playlist, 0, 0);
+        // ✅ reforça qualidade após carregar playlist
+        enforceLowQuality(playerRef.current);
+      } catch {}
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlist, videoId]);
 
   return (
