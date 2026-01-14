@@ -245,7 +245,7 @@ export default function TV() {
           {recentItems.length ? (
             recentItems.map((h, i) => (
               <span key={i} className="called-chip">
-                {h.nome} <span className="muted">• Cons. {h.sala}</span>
+                {h.nome} <span className="muted">• Consultório {h.sala}</span>
               </span>
             ))
           ) : null}
