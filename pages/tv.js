@@ -1,11 +1,10 @@
-// pages/tv.js - Versão otimizada para Fire TV
+// pages/tv.js - Versão ULTRA otimizada para Fire TV (apenas YouTube)
 import Head from 'next/head';
 import Script from 'next/script';
 import { useEffect, useRef, useState, memo } from 'react';
 import { db } from '../utils/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import YoutubePlayer from '../components/YoutubePlayer';
-import VideoPlayer from '../components/VideoPlayer';
 import Carousel from '../components/Carousel';
 
 const GROUP_WINDOW_MS = 30000;
@@ -42,7 +41,6 @@ function playQueue(audioQueueRef, playingRef) {
 // Componentes memoizados para evitar re-renders desnecessários (otimização Fire TV)
 const MemoizedCarousel = memo(Carousel);
 const MemoizedYoutube = memo(YoutubePlayer);
-const MemoizedVideo = memo(VideoPlayer);
 
 export default function TV() {
   const [history, setHistory] = useState([]);
@@ -54,17 +52,14 @@ export default function TV() {
   const [videoId, setVideoId] = useState('');
   const [ytList, setYtList] = useState([]);
 
-  // Vídeos locais
-  const [hasLocalVideos, setHasLocalVideos] = useState(false);
-
   // Configurações de personalização
   const [roomFontSize, setRoomFontSize] = useState(100);
   const [roomColor, setRoomColor] = useState(DEFAULT_COLORS.room);
 
-  // Relógio - atualiza a cada 5 segundos (reduz re-renders para Fire TV)
+  // Relógio - atualiza a cada 10 segundos (reduz re-renders para Fire TV)
   const [nowMs, setNowMs] = useState(Date.now());
   useEffect(() => { 
-    const t = setInterval(() => setNowMs(Date.now()), 5000); 
+    const t = setInterval(() => setNowMs(Date.now()), 10000); 
     return () => clearInterval(t); 
   }, []);
 
@@ -191,18 +186,6 @@ export default function TV() {
     return () => unsub();
   }, []);
 
-  // Vídeos locais (Firebase Storage)
-  useEffect(() => {
-    const q = query(collection(db, 'videoPlaylist'), orderBy('order', 'asc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(item => item.url && item.enabled !== false);
-      setHasLocalVideos(list.length > 0);
-    });
-    return () => unsub();
-  }, []);
-
   // Derivações de UI
   const withinIdle = lastCallAt ? (nowMs - lastCallAt) < idleSeconds * 1000 : false;
   const isIdle = forcedIdle || !history.length || !withinIdle;
@@ -240,9 +223,7 @@ export default function TV() {
       {/* AREA PRINCIPAL: YouTube + Carrossel */}
       <div className="tv-main">
         <div className="tv-video">
-          {hasLocalVideos ? (
-            <MemoizedVideo />
-          ) : hasPlaylist ? (
+          {hasPlaylist ? (
             <MemoizedYoutube playlist={ytList} />
           ) : hasSingleVideo ? (
             <MemoizedYoutube videoId={videoId} />
@@ -313,7 +294,7 @@ export default function TV() {
       {/* Script de voz */}
       <Script src="/tv-ducking.js" strategy="afterInteractive" />
 
-      {/* ===== ESTILOS RESPONSIVOS ===== */}
+      {/* ===== ESTILOS OTIMIZADOS PARA FIRE TV ===== */}
       <style jsx global>{`
         * { 
           box-sizing: border-box; 
@@ -349,6 +330,13 @@ export default function TV() {
           --padding: 1.2vh;
         }
 
+        /* ===== OTIMIZAÇÕES GLOBAIS PARA FIRE TV ===== */
+        * {
+          /* Desabilita animações pesadas */
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+
         /* ===== TELA PRINCIPAL ===== */
         .tv-screen {
           width: 100vw;
@@ -357,6 +345,8 @@ export default function TV() {
           flex-direction: column;
           background: var(--tv-bg);
           overflow: hidden;
+          /* GPU acceleration */
+          transform: translateZ(0);
         }
 
         /* ===== AREA PRINCIPAL (Video + Carrossel) ===== */
@@ -377,6 +367,9 @@ export default function TV() {
           background: #000;
           border-radius: 12px;
           overflow: hidden;
+          /* GPU layer */
+          transform: translateZ(0);
+          will-change: transform;
         }
 
         .tv-video > * {
@@ -396,7 +389,7 @@ export default function TV() {
           font-size: 2vh;
         }
 
-        /* Carrossel - horizontal 16:9 */
+        /* Carrossel */
         .tv-carousel {
           position: relative;
           width: 100%;
@@ -405,6 +398,8 @@ export default function TV() {
           border: 1px solid rgba(255,255,255,0.08);
           border-radius: 12px;
           overflow: hidden;
+          /* GPU layer */
+          transform: translateZ(0);
         }
 
         /* ===== RODAPE ===== */
@@ -472,7 +467,7 @@ export default function TV() {
           margin-bottom: 1.5vh;
         }
 
-        /* Modo IDLE (logo) - AUMENTADA */
+        /* Modo IDLE (logo) */
         .current-call.idle.idle-full {
           background: #f5f5f5;
           outline: none;
@@ -547,24 +542,14 @@ export default function TV() {
           font-weight: 700;
         }
 
-        /* Animações */
+        /* Animações SIMPLIFICADAS para Fire TV */
         @keyframes flashGlow {
           0% { box-shadow: 0 0 0 0 rgba(92,184,92,0.9); }
-          70% { box-shadow: 0 0 24px 16px rgba(92,184,92,0.0); }
-          100% { box-shadow: 0 0 0 0 rgba(92,184,92,0.0); }
-        }
-
-        @keyframes beacon {
-          0%, 100% { filter: drop-shadow(0 0 0 rgba(92,184,92,0)); }
-          50% { filter: drop-shadow(0 0 18px rgba(92,184,92,0.9)); }
+          100% { box-shadow: 0 0 24px 16px rgba(92,184,92,0.0); }
         }
 
         .current-call.flash {
-          animation: flashGlow 1.1s ease-out 2;
-        }
-
-        .current-call.flash #current-call-name {
-          animation: beacon 1.1s ease-out 2;
+          animation: flashGlow 0.8s ease-out 2;
         }
 
         /* Util */
@@ -572,7 +557,7 @@ export default function TV() {
           color: var(--tv-muted); 
         }
 
-        /* ===== RESPONSIVIDADE PARA DIFERENTES TELAS ===== */
+        /* ===== RESPONSIVIDADE ===== */
         
         /* TV Vertical / Portrait */
         @media (orientation: portrait) {
@@ -586,7 +571,7 @@ export default function TV() {
           }
         }
 
-        /* Telas pequenas (tablets, monitores pequenos) */
+        /* Telas pequenas */
         @media (max-height: 600px) {
           :root {
             --footer-height: 45vh;
