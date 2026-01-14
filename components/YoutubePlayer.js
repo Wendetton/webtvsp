@@ -1,6 +1,4 @@
-// components/YoutubePlayer.js — suporta vídeo único OU playlist (loop)
-// Usa a YouTube Iframe API. Se playlist tiver itens, ela tem prioridade sobre videoId.
-
+// components/YoutubePlayer.js - Otimizado para Fire TV (baixa qualidade)
 import { useEffect, useRef } from 'react';
 
 export default function YoutubePlayer({ videoId, playlist = [] }) {
@@ -8,28 +6,15 @@ export default function YoutubePlayer({ videoId, playlist = [] }) {
   const iframeRef = useRef(null);
   const readyRef = useRef(false);
   const playlistRef = useRef(playlist);
+  const mountedRef = useRef(true);
 
   useEffect(() => { playlistRef.current = playlist; }, [playlist]);
 
-  // Força qualidade baixa (YouTube pode ignorar dependendo do contexto/dispositivo)
-  const enforceLowQuality = (player) => {
-    try {
-      if (!player) return;
-
-      // Tenta travar em "small" (geralmente ~240p)
-      if (typeof player.setPlaybackQualityRange === 'function') {
-        player.setPlaybackQualityRange('small', 'small');
-      }
-      if (typeof player.setPlaybackQuality === 'function') {
-        player.setPlaybackQuality('small');
-      }
-    } catch {}
-  };
-
-  // Carrega a API e cria o player
   useEffect(() => {
+    mountedRef.current = true;
+    
     function create() {
-      if (playerRef.current) return;
+      if (playerRef.current || !iframeRef.current) return;
 
       const initialId = (playlist && playlist.length > 0) ? playlist[0] : (videoId || '');
 
@@ -39,137 +24,179 @@ export default function YoutubePlayer({ videoId, playlist = [] }) {
         videoId: initialId,
         playerVars: {
           autoplay: 1,
+          mute: 1,
           controls: 0,
           modestbranding: 1,
           rel: 0,
           fs: 0,
           iv_load_policy: 3,
-          mute: 0,
           playsinline: 1,
-
-          // ✅ tenta iniciar em baixa qualidade
-          // Observação: o YouTube pode ajustar automaticamente mesmo assim,
-          // por isso reforçamos também via API nos eventos.
+          enablejsapi: 1,
+          origin: typeof window !== 'undefined' ? window.location.origin : '',
           vq: 'small',
-
-          // Dica: para loopar playlist via playerVars, é bom informar "playlist"
-          ...(playlist && playlist.length > 0 ? { loop: 1, playlist: playlist.join(',') } : {}),
+          ...(playlist && playlist.length > 0 ? { loop: 1, playlist: playlist.join(',') } : { loop: 1 }),
         },
         events: {
           onReady: (ev) => {
             readyRef.current = true;
-
-            // volume original
+            window.tvYTPlayer = ev.target;
+            
+            console.log('[YT] Player pronto - definindo qualidade baixa');
+            
             try {
-              const init = (window.tvConfig && Number.isFinite(window.tvConfig.restoreVolume))
-                ? window.tvConfig.restoreVolume : 60;
-              ev.target.unMute?.();
-              ev.target.setVolume?.(init);
-            } catch {}
-
-            // ✅ aplica baixa qualidade assim que o player fica pronto
-            enforceLowQuality(ev.target);
-          },
-
-          // ✅ se o YouTube tentar mudar qualidade, tentamos voltar pra "small"
-          onPlaybackQualityChange: (ev) => {
-            try {
-              // ev.data costuma ser string ("small", "medium", "hd720"...)
-              if (ev?.data && ev.data !== 'small') {
-                enforceLowQuality(ev.target);
-              }
+              ev.target.setPlaybackQuality('small');
+              ev.target.playVideo();
+              
+              setTimeout(() => {
+                if (!mountedRef.current) return;
+                try {
+                  ev.target.setPlaybackQuality('small');
+                  const vol = (window.tvConfig?.restoreVolume) || 60;
+                  ev.target.unMute();
+                  ev.target.setVolume(vol);
+                } catch {}
+              }, 2000);
             } catch {}
           },
-
           onStateChange: (ev) => {
             const YT = window.YT;
-            if (!YT) return;
-
-            // ✅ quando começa a tocar, reforça a qualidade (às vezes muda após play)
+            if (!YT || !mountedRef.current) return;
+            
             if (ev.data === YT.PlayerState.PLAYING) {
-              enforceLowQuality(ev.target);
+              try {
+                const currentQuality = ev.target.getPlaybackQuality();
+                console.log('[YT] Qualidade atual:', currentQuality);
+                if (currentQuality !== 'small' && currentQuality !== 'tiny') {
+                  ev.target.setPlaybackQuality('small');
+                }
+              } catch {}
             }
-
-            // Se for vídeo único (sem playlist), loop simples
-            if (ev.data === YT.PlayerState.ENDED && (!playlistRef.current || playlistRef.current.length === 0)) {
-              try { ev.target.seekTo(0); ev.target.playVideo(); } catch {}
+            
+            if (ev.data === YT.PlayerState.PAUSED || ev.data === YT.PlayerState.UNSTARTED) {
+              setTimeout(() => {
+                if (!mountedRef.current) return;
+                try { ev.target.playVideo(); } catch {}
+              }, 500);
             }
+            
+            if (ev.data === YT.PlayerState.ENDED) {
+              if (!playlistRef.current?.length) {
+                try { 
+                  ev.target.seekTo(0); 
+                  ev.target.playVideo(); 
+                } catch {}
+              }
+            }
+          },
+          onPlaybackQualityChange: (ev) => {
+            console.log('[YT] Qualidade mudou para:', ev.data);
+          },
+          onError: (ev) => {
+            console.log('[YT] Erro:', ev.data);
+            setTimeout(() => {
+              if (!mountedRef.current) return;
+              try {
+                const id = playlistRef.current?.[0] || videoId;
+                if (id) playerRef.current?.loadVideoById(id);
+              } catch {}
+            }, 3000);
           }
         }
       });
     }
 
-    if (window.YT && window.YT.Player) {
+    if (window.YT?.Player) {
       create();
     } else {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      document.body.appendChild(tag);
-      window.onYouTubeIframeAPIReady = () => create();
+      if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        document.body.appendChild(tag);
+      }
+      window.onYouTubeIframeAPIReady = create;
     }
 
     return () => {
-      try { if (playerRef.current?.destroy) playerRef.current.destroy(); } catch {}
+      mountedRef.current = false;
+      try { 
+        playerRef.current?.destroy(); 
+        window.tvYTPlayer = null;
+      } catch {}
       playerRef.current = null;
       readyRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Troca de vídeo único
   useEffect(() => {
     if (!readyRef.current || !playerRef.current) return;
-    if (playlist && playlist.length > 0) return; // playlist tem prioridade
+    if (playlist?.length > 0) return;
     if (!videoId) return;
-    try {
-      playerRef.current.loadVideoById(videoId);
-      // ✅ reforça qualidade após troca
-      enforceLowQuality(playerRef.current);
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    try { playerRef.current.loadVideoById(videoId); } catch {}
   }, [videoId, playlist]);
 
-  // aplica o volume no MESMO player criado pelo componente
-  useEffect(() => {
-    function setVol(v){
-      try{
-        const p = playerRef.current;
-        if (!p) return;
-        // alguns WebViews só respeitam mute/unmute no 0
-        if (v <= 0) { p.mute?.(); p.setVolume?.(0); }
-        else { p.unMute?.(); p.setVolume?.(v); }
-      } catch {}
-    }
-    function onVol(e){
-      const v = Number(e?.detail?.v);
-      if (Number.isFinite(v)) setVol(Math.max(0, Math.min(100, Math.round(v))));
-    }
-    window.addEventListener('tv:ytVolume', onVol);
-    return () => window.removeEventListener('tv:ytVolume', onVol);
-  }, []);
-
-  // Troca de playlist
   useEffect(() => {
     if (!readyRef.current || !playerRef.current) return;
-    if (playlist && playlist.length > 0) {
+    if (playlist?.length > 0) {
+      try { playerRef.current.loadPlaylist(playlist, 0, 0); } catch {}
+    }
+  }, [playlist]);
+
+  useEffect(() => {
+    function handleVolume(e) {
+      const v = Number(e?.detail?.v);
+      if (!Number.isFinite(v) || !playerRef.current) return;
       try {
-        playerRef.current.loadPlaylist(playlist, 0, 0);
-        // ✅ reforça qualidade após carregar playlist
-        enforceLowQuality(playerRef.current);
+        if (v <= 0) {
+          playerRef.current.mute();
+        } else {
+          playerRef.current.unMute();
+          playerRef.current.setVolume(v);
+        }
       } catch {}
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playlist, videoId]);
+    
+    window.addEventListener('tv:ytVolume', handleVolume);
+    return () => window.removeEventListener('tv:ytVolume', handleVolume);
+  }, []);
+
+  useEffect(() => {
+    function handleInteraction() {
+      if (!playerRef.current || !readyRef.current) return;
+      try {
+        const state = playerRef.current.getPlayerState?.();
+        if (state !== window.YT?.PlayerState?.PLAYING) {
+          playerRef.current.playVideo();
+          playerRef.current.unMute();
+          playerRef.current.setVolume(window.tvConfig?.restoreVolume || 60);
+        }
+      } catch {}
+    }
+    
+    document.addEventListener('click', handleInteraction);
+    document.addEventListener('touchstart', handleInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleInteraction);
+      document.removeEventListener('touchstart', handleInteraction);
+    };
+  }, []);
 
   return (
-    <div className="yt-wrap">
-      <div className="yt-inner">
-        <div id="yt-player" ref={iframeRef}></div>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
+      <div style={{ position: 'absolute', inset: 0 }}>
+        <div 
+          id="yt-player" 
+          ref={iframeRef}
+          style={{ width: '100%', height: '100%' }}
+        />
       </div>
-      <style jsx>{`
-        .yt-wrap { position:relative; width:100%; height:100%; }
-        .yt-inner { position:absolute; inset:0; }
-        #yt-player, #yt-player iframe { width:100%; height:100%; }
+      <style jsx global>{`
+        #yt-player iframe {
+          width: 100% !important;
+          height: 100% !important;
+          border: 0 !important;
+        }
       `}</style>
     </div>
   );
