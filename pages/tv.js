@@ -245,7 +245,7 @@ export default function TV() {
           {recentItems.length ? (
             recentItems.map((h, i) => (
               <span key={i} className="called-chip">
-                {h.nome} <span className="muted">• Consultório {h.sala}</span>
+                {h.nome} <span className="muted">• Cons. {h.sala}</span>
               </span>
             ))
           ) : null}
@@ -261,7 +261,15 @@ export default function TV() {
                 {currentGroup.map((p, i) => (
                   <div key={i} className="now-card">
                     <div className="now-name">{p.nome}</div>
-                    <div className="now-room">Consultório {p.sala}</div>
+                    <div 
+                      className="now-room"
+                      style={{ 
+                        fontSize: `calc(clamp(16px, 2.5vh, 24px) * ${roomFontSize / 100})`,
+                        color: roomColor 
+                      }}
+                    >
+                      Consultório {p.sala}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -270,7 +278,15 @@ export default function TV() {
             <div className="now-single">
               <div className="label">Chamando agora</div>
               <div id="current-call-name">{single.nome}</div>
-              <div className="sub">Consultório {single.sala}</div>
+              <div 
+                className="sub"
+                style={{ 
+                  fontSize: `calc(clamp(20px, 4vh, 36px) * ${roomFontSize / 100})`,
+                  color: roomColor 
+                }}
+              >
+                Consultório {single.sala}
+              </div>
             </div>
           ) : null}
         </div>
@@ -417,7 +433,7 @@ export default function TV() {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 0;
+          padding: 2.5vh 3vw;
         }
 
         .current-call .label {
@@ -437,9 +453,8 @@ export default function TV() {
         }
 
         .current-call.idle.idle-full .idle-logo {
-          width: 100%;
-          height: 100%;
-          transform: scale(2.0);
+          max-width: 90%;
+          max-height: 95%;
           object-fit: contain;
           filter: drop-shadow(0 8px 24px rgba(0,0,0,0.15));
           animation: tvFadeIn 380ms ease forwards;
