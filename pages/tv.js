@@ -1,15 +1,17 @@
-// pages/tv.js - Versão LEVE otimizada para Fire TV
+// pages/tv.js - Versão otimizada para Fire TV
 import Head from 'next/head';
 import Script from 'next/script';
 import { useEffect, useRef, useState, memo } from 'react';
 import { db } from '../utils/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import YoutubePlayer from '../components/YoutubePlayer';
+import VideoPlayer from '../components/VideoPlayer';
 import Carousel from '../components/Carousel';
 
 const GROUP_WINDOW_MS = 30000;
 const DUAL_KEEP_MS = 60000;
 
+// Cores padrão baseadas na logo São Peregrino
 const DEFAULT_COLORS = {
   bg: '#0a1a14',
   panel: '#0d2118',
@@ -37,23 +39,29 @@ function playQueue(audioQueueRef, playingRef) {
   setTimeout(() => { playingRef.current = false; playQueue(audioQueueRef, playingRef); }, 4500);
 }
 
-// Componente de Carrossel memoizado para evitar re-renders
+// Componentes memoizados para evitar re-renders desnecessários (otimização Fire TV)
 const MemoizedCarousel = memo(Carousel);
-
-// Componente de YouTube memoizado
 const MemoizedYoutube = memo(YoutubePlayer);
+const MemoizedVideo = memo(VideoPlayer);
 
 export default function TV() {
   const [history, setHistory] = useState([]);
   const [idleSeconds, setIdleSeconds] = useState(120);
   const [forcedIdle, setForcedIdle] = useState(false);
   const [lastCallAt, setLastCallAt] = useState(null);
+
+  // YouTube
   const [videoId, setVideoId] = useState('');
   const [ytList, setYtList] = useState([]);
+
+  // Vídeos locais
+  const [hasLocalVideos, setHasLocalVideos] = useState(false);
+
+  // Configurações de personalização
   const [roomFontSize, setRoomFontSize] = useState(100);
   const [roomColor, setRoomColor] = useState(DEFAULT_COLORS.room);
 
-  // Relógio - atualiza a cada 5 segundos ao invés de 1 (reduz re-renders)
+  // Relógio - atualiza a cada 5 segundos (reduz re-renders para Fire TV)
   const [nowMs, setNowMs] = useState(Date.now());
   useEffect(() => { 
     const t = setInterval(() => setNowMs(Date.now()), 5000); 
@@ -66,7 +74,7 @@ export default function TV() {
   const audioQueueRef = useRef([]);
   const playingRef = useRef(false);
 
-  // Historico - com throttle para evitar muitas atualizações
+  // Historico
   useEffect(() => {
     const qCalls = query(collection(db, 'calls'), orderBy('timestamp', 'desc'), limit(6));
     const unsub = onSnapshot(qCalls, (snap) => {
@@ -116,6 +124,10 @@ export default function TV() {
       if (!data) return;
       
       const cfg = {
+        announceTemplate: data.announceTemplate || 'Atenção: paciente {{nome}}. Dirija-se à sala {{salaTxt}}.',
+        duckVolume: Number.isFinite(data.duckVolume) ? Number(data.duckVolume) : 20,
+        restoreVolume: Number.isFinite(data.restoreVolume) ? Number(data.restoreVolume) : 60,
+        leadMs: Number.isFinite(data.leadMs) ? Number(data.leadMs) : 450,
         idleSeconds: Number.isFinite(data.idleSeconds) ? Math.min(300, Math.max(60, Number(data.idleSeconds))) : 120,
         videoId: data.videoId || '',
         roomFontSize: Number.isFinite(data.roomFontSize) ? Number(data.roomFontSize) : 100,
@@ -124,10 +136,9 @@ export default function TV() {
         tvPanelColor: data.tvPanelColor || DEFAULT_COLORS.panel,
         tvAccentColor: data.tvAccentColor || DEFAULT_COLORS.accent,
         tvTextColor: data.tvTextColor || DEFAULT_COLORS.text,
-        restoreVolume: Number.isFinite(data.restoreVolume) ? Number(data.restoreVolume) : 60,
       };
       
-      // Aplica CSS variables
+      // Aplica cores via CSS variables
       const root = document.documentElement;
       root.style.setProperty('--tv-bg', cfg.tvBgColor);
       root.style.setProperty('--tv-panel', cfg.tvPanelColor);
@@ -137,11 +148,11 @@ export default function TV() {
       root.style.setProperty('--room-font-scale', String(cfg.roomFontSize / 100));
       
       setIdleSeconds(cfg.idleSeconds);
-      setVideoId(cfg.videoId);
+      setVideoId(String(cfg.videoId || ''));
       setRoomFontSize(cfg.roomFontSize);
       setRoomColor(cfg.roomColor);
       
-      if (typeof window !== 'undefined') window.tvConfig = cfg;
+      if (typeof window !== 'undefined') window.tvConfig = { ...cfg };
     });
     return () => unsub();
   }, []);
@@ -155,8 +166,15 @@ export default function TV() {
       if (!Number.isFinite(d.ytVolume)) return;
       const v = Math.max(0, Math.min(100, Math.round(d.ytVolume)));
       try {
-        window.dispatchEvent(new CustomEvent('tv:ytVolume', { detail: { v } }));
-      } catch {}
+        const ev = new CustomEvent('tv:ytVolume', { detail: { v } });
+        window.dispatchEvent(ev);
+      } catch {
+        try {
+          const ev = document.createEvent('CustomEvent');
+          ev.initCustomEvent('tv:ytVolume', false, false, { v });
+          window.dispatchEvent(ev);
+        } catch {}
+      }
     });
     return () => unsub();
   }, []);
@@ -169,6 +187,18 @@ export default function TV() {
         .map(x => String(x.videoId || '').trim())
         .filter(Boolean);
       setYtList(list);
+    });
+    return () => unsub();
+  }, []);
+
+  // Vídeos locais (Firebase Storage)
+  useEffect(() => {
+    const q = query(collection(db, 'videoPlaylist'), orderBy('order', 'asc'));
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(item => item.url && item.enabled !== false);
+      setHasLocalVideos(list.length > 0);
     });
     return () => unsub();
   }, []);
@@ -193,28 +223,33 @@ export default function TV() {
       }
     }
   }
-  
   const currentIds = new Set(currentGroup.map(x => x.id));
   const recentItems = history.filter(h => !currentIds.has(h.id)).slice(0, 2);
   const single = currentGroup.length === 1 ? currentGroup[0] : null;
+
   const hasPlaylist = ytList && ytList.length > 0;
   const hasSingleVideo = !hasPlaylist && !!videoId;
 
   return (
     <div className="tv-screen">
       <Head>
-        <title>TV</title>
-        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+        <title>Chamador na TV</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </Head>
 
+      {/* AREA PRINCIPAL: YouTube + Carrossel */}
       <div className="tv-main">
         <div className="tv-video">
-          {hasPlaylist ? (
+          {hasLocalVideos ? (
+            <MemoizedVideo />
+          ) : hasPlaylist ? (
             <MemoizedYoutube playlist={ytList} />
           ) : hasSingleVideo ? (
             <MemoizedYoutube videoId={videoId} />
           ) : (
-            <div className="tv-placeholder">Configure um vídeo</div>
+            <div className="tv-placeholder">
+              <div>Configure um vídeo no Admin</div>
+            </div>
           )}
         </div>
         <div className="tv-carousel">
@@ -222,26 +257,35 @@ export default function TV() {
         </div>
       </div>
 
+      {/* RODAPE: Chamadas */}
       <div className="tv-footer">
         <div className="called-list">
-          {recentItems.map((h, i) => (
-            <span key={h.id} className="called-chip">
-              {h.nome} <span className="muted">• Cons. {h.sala}</span>
-            </span>
-          ))}
+          {recentItems.length ? (
+            recentItems.map((h, i) => (
+              <span key={h.id || i} className="called-chip">
+                {h.nome} <span className="muted">• Cons. {h.sala}</span>
+              </span>
+            ))
+          ) : null}
         </div>
 
         <div className={`current-call ${isIdle ? 'idle idle-full' : ''}`}>
           {isIdle ? (
-            <img src="/logo.png" alt="" className="idle-logo" />
+            <img src="/logo.png" alt="Logo" className="idle-logo" />
           ) : currentGroup.length > 1 ? (
             <>
               <div className="label">Chamando agora</div>
               <div className="now-cards cols-2">
                 {currentGroup.map((p, i) => (
-                  <div key={p.id} className="now-card">
+                  <div key={p.id || i} className="now-card">
                     <div className="now-name">{p.nome}</div>
-                    <div className="now-room" style={{ fontSize: `calc(clamp(16px, 2.5vh, 24px) * ${roomFontSize / 100})`, color: roomColor }}>
+                    <div 
+                      className="now-room"
+                      style={{ 
+                        fontSize: `calc(clamp(16px, 2.5vh, 24px) * ${roomFontSize / 100})`,
+                        color: roomColor 
+                      }}
+                    >
                       Consultório {p.sala}
                     </div>
                   </div>
@@ -252,7 +296,13 @@ export default function TV() {
             <div className="now-single">
               <div className="label">Chamando agora</div>
               <div id="current-call-name">{single.nome}</div>
-              <div className="sub" style={{ fontSize: `calc(clamp(20px, 4vh, 36px) * ${roomFontSize / 100})`, color: roomColor }}>
+              <div 
+                className="sub"
+                style={{ 
+                  fontSize: `calc(clamp(20px, 4vh, 36px) * ${roomFontSize / 100})`,
+                  color: roomColor 
+                }}
+              >
                 Consultório {single.sala}
               </div>
             </div>
@@ -260,45 +310,313 @@ export default function TV() {
         </div>
       </div>
 
+      {/* Script de voz */}
       <Script src="/tv-ducking.js" strategy="afterInteractive" />
 
+      {/* ===== ESTILOS RESPONSIVOS ===== */}
       <style jsx global>{`
-        *{box-sizing:border-box;margin:0;padding:0}
-        html,body,#__next{height:100%;width:100%;overflow:hidden}
-        body{font-family:system-ui,-apple-system,sans-serif;background:var(--tv-bg,${DEFAULT_COLORS.bg});color:var(--tv-text,${DEFAULT_COLORS.text})}
-        :root{
-          --tv-bg:${DEFAULT_COLORS.bg};--tv-panel:${DEFAULT_COLORS.panel};
-          --tv-accent:${DEFAULT_COLORS.accent};--tv-text:${DEFAULT_COLORS.text};
-          --tv-muted:#93a0b3;--room-color:${DEFAULT_COLORS.room};--room-font-scale:1;
-          --footer-height:42vh;--gap:1.2vh;--padding:1.2vh
+        * { 
+          box-sizing: border-box; 
+          margin: 0; 
+          padding: 0; 
         }
-        .tv-screen{width:100vw;height:100vh;display:flex;flex-direction:column;background:var(--tv-bg);overflow:hidden}
-        .tv-main{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);padding:var(--padding);min-height:0}
-        .tv-video{position:relative;width:100%;height:100%;background:#000;border-radius:12px;overflow:hidden}
-        .tv-video>*{position:absolute;top:0;left:0;width:100%;height:100%}
-        .tv-placeholder{display:flex;align-items:center;justify-content:center;height:100%;color:var(--tv-muted);font-size:2vh}
-        .tv-carousel{position:relative;width:100%;height:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden}
-        .tv-footer{height:var(--footer-height);background:var(--tv-panel);padding:var(--padding) calc(var(--padding)*2);border-top:2px solid var(--tv-accent);display:flex;flex-direction:column;gap:var(--gap)}
-        .called-list{height:7vh;min-height:50px;display:flex;align-items:center;gap:1.5vw;overflow-x:auto;scrollbar-width:none}
-        .called-list::-webkit-scrollbar{display:none}
-        .called-chip{display:inline-flex;align-items:center;padding:1.2vh 2vw;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:999px;font-weight:800;font-size:clamp(16px,2.2vw,26px);color:var(--tv-text);white-space:nowrap;flex-shrink:0}
-        .current-call{flex:1;border-radius:16px;position:relative;overflow:hidden;background:radial-gradient(120% 120% at 50% 50%,rgba(92,184,92,0.18) 0%,rgba(92,184,92,0.06) 100%);outline:2px solid var(--tv-accent);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2.5vh 3vw}
-        .current-call .label{font-size:clamp(14px,2.2vh,22px);color:var(--tv-muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:900;margin-bottom:1.5vh}
-        .current-call.idle.idle-full{background:#f5f5f5;outline:none}
-        .current-call.idle.idle-full .idle-logo{max-width:90%;max-height:95%;object-fit:contain}
-        .now-single{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;width:100%}
-        #current-call-name{font-weight:900;font-size:clamp(40px,10vh,100px);line-height:1.15;color:var(--tv-text);word-break:break-word;padding:0 2vw}
-        .current-call .sub{margin-top:1.5vh;font-weight:800}
-        .now-cards{display:grid;gap:2vw;width:100%;height:100%}
-        .now-cards.cols-2{grid-template-columns:1fr 1fr}
-        .now-card{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:2.5vh 2vw;display:flex;flex-direction:column;align-items:center;justify-content:center}
-        .now-name{font-size:clamp(28px,6vh,56px);font-weight:900;line-height:1.15;text-align:center}
-        .now-room{margin-top:1.5vh;font-weight:700}
-        @keyframes flashGlow{0%{box-shadow:0 0 0 0 rgba(92,184,92,0.9)}70%{box-shadow:0 0 24px 16px rgba(92,184,92,0)}100%{box-shadow:0 0 0 0 rgba(92,184,92,0)}}
-        .current-call.flash{animation:flashGlow 1.1s ease-out 2}
-        .muted{color:var(--tv-muted)}
-        @media(orientation:portrait){.tv-main{grid-template-columns:1fr;grid-template-rows:1fr 1fr}:root{--footer-height:35vh}}
-        @media(max-height:600px){:root{--footer-height:45vh;--padding:1vh;--gap:1vh}#current-call-name{font-size:clamp(28px,8vh,56px)}}
+        
+        html, body, #__next { 
+          height: 100%; 
+          width: 100%;
+          overflow: hidden;
+        }
+        
+        body { 
+          font-family: system-ui, -apple-system, sans-serif;
+          background: var(--tv-bg, ${DEFAULT_COLORS.bg});
+          color: var(--tv-text, ${DEFAULT_COLORS.text});
+        }
+
+        :root {
+          --tv-bg: ${DEFAULT_COLORS.bg};
+          --tv-panel: ${DEFAULT_COLORS.panel};
+          --tv-accent: ${DEFAULT_COLORS.accent};
+          --tv-text: ${DEFAULT_COLORS.text};
+          --tv-muted: #93a0b3;
+          --room-color: ${DEFAULT_COLORS.room};
+          --room-font-scale: 1;
+          
+          /* Alturas responsivas baseadas em vh */
+          --footer-height: 42vh;
+          --main-height: 58vh;
+          --gap: 1.2vh;
+          --padding: 1.2vh;
+        }
+
+        /* ===== TELA PRINCIPAL ===== */
+        .tv-screen {
+          width: 100vw;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          background: var(--tv-bg);
+          overflow: hidden;
+        }
+
+        /* ===== AREA PRINCIPAL (Video + Carrossel) ===== */
+        .tv-main {
+          flex: 1;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: var(--gap);
+          padding: var(--padding);
+          min-height: 0;
+        }
+
+        /* Video container */
+        .tv-video {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          background: #000;
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        .tv-video > * {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
+
+        .tv-placeholder {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          color: var(--tv-muted);
+          font-size: 2vh;
+        }
+
+        /* Carrossel - horizontal 16:9 */
+        .tv-carousel {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        /* ===== RODAPE ===== */
+        .tv-footer {
+          height: var(--footer-height);
+          background: var(--tv-panel);
+          padding: var(--padding) calc(var(--padding) * 2);
+          border-top: 2px solid var(--tv-accent);
+          box-shadow: 0 -12px 24px rgba(0,0,0,0.35);
+          display: flex;
+          flex-direction: column;
+          gap: var(--gap);
+        }
+
+        /* Lista de chamados recentes */
+        .called-list {
+          height: 7vh;
+          min-height: 50px;
+          display: flex;
+          align-items: center;
+          gap: 1.5vw;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        
+        .called-list::-webkit-scrollbar { 
+          display: none; 
+        }
+
+        .called-chip {
+          display: inline-flex;
+          align-items: center;
+          padding: 1.2vh 2vw;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 999px;
+          font-weight: 800;
+          font-size: clamp(16px, 2.2vw, 26px);
+          color: var(--tv-text);
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        /* Area de chamada atual */
+        .current-call {
+          flex: 1;
+          border-radius: 16px;
+          position: relative;
+          overflow: hidden;
+          background: radial-gradient(120% 120% at 50% 50%, rgba(92,184,92,0.18) 0%, rgba(92,184,92,0.06) 100%);
+          outline: 2px solid var(--tv-accent);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 2.5vh 3vw;
+        }
+
+        .current-call .label {
+          font-size: clamp(14px, 2.2vh, 22px);
+          color: var(--tv-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 900;
+          margin-bottom: 1.5vh;
+        }
+
+        /* Modo IDLE (logo) - AUMENTADA */
+        .current-call.idle.idle-full {
+          background: #f5f5f5;
+          outline: none;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+        }
+
+        .current-call.idle.idle-full .idle-logo {
+          max-width: 90%;
+          max-height: 95%;
+          object-fit: contain;
+          filter: drop-shadow(0 8px 24px rgba(0,0,0,0.15));
+        }
+
+        /* Nome do paciente - SINGLE */
+        .now-single {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          width: 100%;
+        }
+
+        #current-call-name {
+          font-weight: 900;
+          font-size: clamp(40px, 10vh, 100px);
+          line-height: 1.15;
+          color: var(--tv-text);
+          text-shadow: 0 3px 18px rgba(0,0,0,0.55);
+          word-break: break-word;
+          padding: 0 2vw;
+        }
+
+        .current-call .sub {
+          margin-top: 1.5vh;
+          font-weight: 800;
+        }
+
+        /* Modo DUAL (2 pacientes) */
+        .now-cards {
+          display: grid;
+          gap: 2vw;
+          width: 100%;
+          height: 100%;
+        }
+        
+        .now-cards.cols-2 {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .now-card {
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 14px;
+          padding: 2.5vh 2vw;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        }
+
+        .now-name {
+          font-size: clamp(28px, 6vh, 56px);
+          font-weight: 900;
+          line-height: 1.15;
+          text-align: center;
+        }
+
+        .now-room {
+          margin-top: 1.5vh;
+          font-weight: 700;
+        }
+
+        /* Animações */
+        @keyframes flashGlow {
+          0% { box-shadow: 0 0 0 0 rgba(92,184,92,0.9); }
+          70% { box-shadow: 0 0 24px 16px rgba(92,184,92,0.0); }
+          100% { box-shadow: 0 0 0 0 rgba(92,184,92,0.0); }
+        }
+
+        @keyframes beacon {
+          0%, 100% { filter: drop-shadow(0 0 0 rgba(92,184,92,0)); }
+          50% { filter: drop-shadow(0 0 18px rgba(92,184,92,0.9)); }
+        }
+
+        .current-call.flash {
+          animation: flashGlow 1.1s ease-out 2;
+        }
+
+        .current-call.flash #current-call-name {
+          animation: beacon 1.1s ease-out 2;
+        }
+
+        /* Util */
+        .muted { 
+          color: var(--tv-muted); 
+        }
+
+        /* ===== RESPONSIVIDADE PARA DIFERENTES TELAS ===== */
+        
+        /* TV Vertical / Portrait */
+        @media (orientation: portrait) {
+          .tv-main {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr 1fr;
+          }
+          
+          :root {
+            --footer-height: 35vh;
+          }
+        }
+
+        /* Telas pequenas (tablets, monitores pequenos) */
+        @media (max-height: 600px) {
+          :root {
+            --footer-height: 45vh;
+            --padding: 1vh;
+            --gap: 1vh;
+          }
+          
+          #current-call-name {
+            font-size: clamp(28px, 8vh, 56px);
+          }
+          
+          .current-call .sub {
+            font-size: clamp(16px, 3vh, 24px);
+          }
+        }
+
+        /* Fire TV Stick / TV Box */
+        @media (min-width: 1280px) and (min-height: 720px) {
+          :root {
+            --footer-height: 40vh;
+          }
+        }
+
+        /* 4K TVs */
+        @media (min-width: 3000px) {
+          :root {
+            --footer-height: 38vh;
+            --padding: 1.5vh;
+          }
+        }
       `}</style>
     </div>
   );
