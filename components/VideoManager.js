@@ -1,11 +1,10 @@
-// components/VideoManager.js - Gerenciador de vídeos para o admin
+// components/VideoManager.js - Gerenciador de vídeos por URL
 import { useEffect, useState, useRef } from 'react';
-import { db, storage } from '../utils/firebase';
+import { db } from '../utils/firebase';
 import {
   collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, 
   query, orderBy, serverTimestamp, setDoc, getDoc
 } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const styles = {
   card: {
@@ -63,6 +62,10 @@ const styles = {
     background: 'rgba(34, 197, 94, 0.2)',
     borderColor: 'rgba(34, 197, 94, 0.4)',
   },
+  btnDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+  },
   volumeContainer: {
     display: 'flex',
     alignItems: 'center',
@@ -83,34 +86,55 @@ const styles = {
     minWidth: 45,
     textAlign: 'right',
   },
-  uploadArea: {
-    border: '2px dashed rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    padding: 20,
+  addForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  inputGroup: {
+    display: 'flex',
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    padding: '12px 14px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 10,
+    color: '#f8fafc',
+    fontSize: 14,
+    fontFamily: 'inherit',
+    outline: 'none',
+  },
+  inputSmall: {
+    width: 100,
+    padding: '12px 14px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 10,
+    color: '#f8fafc',
+    fontSize: 14,
+    fontFamily: 'inherit',
+    outline: 'none',
     textAlign: 'center',
+  },
+  btnAdd: {
+    padding: '12px 20px',
+    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+    border: 'none',
+    borderRadius: 10,
+    color: '#052e16',
+    fontSize: 14,
+    fontWeight: 700,
     cursor: 'pointer',
-    transition: 'all 0.2s',
-    marginBottom: 16,
+    fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
   },
-  uploadAreaHover: {
-    borderColor: '#22c55e',
-    background: 'rgba(34, 197, 94, 0.1)',
-  },
-  fileInput: {
-    display: 'none',
-  },
-  progressBar: {
-    width: '100%',
-    height: 8,
-    background: 'rgba(255,255,255,0.1)',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginTop: 12,
-  },
-  progressFill: {
-    height: '100%',
-    background: 'linear-gradient(90deg, #22c55e, #16a34a)',
-    transition: 'width 0.3s',
+  helpText: {
+    fontSize: 11,
+    color: '#64748b',
+    lineHeight: 1.5,
+    marginTop: 4,
   },
   videoList: {
     display: 'flex',
@@ -141,12 +165,23 @@ const styles = {
     textAlign: 'center',
     fontFamily: 'inherit',
   },
+  videoInfo: {
+    overflow: 'hidden',
+  },
   videoName: {
     fontSize: 13,
     fontWeight: 600,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  videoUrl: {
+    fontSize: 11,
+    color: '#64748b',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    marginTop: 2,
   },
   videoActions: {
     display: 'flex',
@@ -183,15 +218,40 @@ const styles = {
     borderRadius: '50%',
     animation: 'pulse 2s infinite',
   },
+  emptyState: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    padding: 20,
+  },
 };
+
+// Converte link do Google Drive para link direto
+function convertGoogleDriveUrl(url) {
+  if (!url) return url;
+  
+  // Formato: https://drive.google.com/file/d/FILE_ID/view
+  const match1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match1) {
+    return `https://drive.google.com/uc?export=download&id=${match1[1]}`;
+  }
+  
+  // Formato: https://drive.google.com/open?id=FILE_ID
+  const match2 = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+  if (match2) {
+    return `https://drive.google.com/uc?export=download&id=${match2[1]}`;
+  }
+  
+  // Já é link direto ou outro formato
+  return url;
+}
 
 export default function VideoManager() {
   const [videos, setVideos] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [dragOver, setDragOver] = useState(false);
+  const [newUrl, setNewUrl] = useState('');
+  const [newName, setNewName] = useState('');
+  const [adding, setAdding] = useState(false);
   const [control, setControl] = useState({ playing: true, volume: 60, currentIndex: 0 });
-  const fileInputRef = useRef(null);
   const debounceRef = useRef(null);
 
   // Carrega lista de vídeos
@@ -246,7 +306,6 @@ export default function VideoManager() {
     const v = Number(e.target.value);
     setControl(prev => ({ ...prev, volume: v }));
     
-    // Debounce para não sobrecarregar o Firestore
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       updateControl({ volume: v });
@@ -255,16 +314,18 @@ export default function VideoManager() {
 
   // Próximo vídeo
   function nextVideo() {
-    const nextIndex = (control.currentIndex + 1) % Math.max(1, videos.length);
+    if (videos.length <= 1) return;
+    const nextIndex = (control.currentIndex + 1) % videos.length;
     setControl(prev => ({ ...prev, currentIndex: nextIndex }));
-    updateControl({ skipTo: nextIndex, next: false, prev: false });
+    updateControl({ skipTo: nextIndex });
   }
 
   // Vídeo anterior
   function prevVideo() {
-    const prevIndex = control.currentIndex > 0 ? control.currentIndex - 1 : Math.max(0, videos.length - 1);
+    if (videos.length <= 1) return;
+    const prevIndex = control.currentIndex > 0 ? control.currentIndex - 1 : videos.length - 1;
     setControl(prev => ({ ...prev, currentIndex: prevIndex }));
-    updateControl({ skipTo: prevIndex, next: false, prev: false });
+    updateControl({ skipTo: prevIndex });
   }
 
   // Seleciona vídeo específico
@@ -273,91 +334,47 @@ export default function VideoManager() {
     updateControl({ skipTo: index, playing: true });
   }
 
-  // Upload de vídeo
-  async function handleUpload(file) {
-    if (!file || !file.type.startsWith('video/')) {
-      alert('Por favor, selecione um arquivo de vídeo válido.');
+  // Reiniciar playlist
+  function restartPlaylist() {
+    setControl(prev => ({ ...prev, currentIndex: 0 }));
+    updateControl({ skipTo: 0, playing: true });
+  }
+
+  // Adicionar vídeo por URL
+  async function handleAddVideo() {
+    if (!newUrl.trim()) {
+      alert('Cole a URL do vídeo');
       return;
     }
 
-    // Limite de 100MB para Firebase Storage gratuito
-    const maxSize = 100 * 1024 * 1024;
-    if (file.size > maxSize) {
-      alert('O arquivo é muito grande. Máximo permitido: 100MB');
-      return;
-    }
-
-    setUploading(true);
-    setUploadProgress(0);
-
+    setAdding(true);
     try {
-      // Gera nome único
-      const timestamp = Date.now();
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `videos/${timestamp}_${safeName}`;
-      const storageRef = ref(storage, fileName);
+      // Converte URL do Google Drive se necessário
+      const directUrl = convertGoogleDriveUrl(newUrl.trim());
+      
+      // Nome do vídeo
+      const videoName = newName.trim() || `Vídeo ${videos.length + 1}`;
+      
+      // Determina ordem
+      const maxOrder = videos.reduce((max, v) => Math.max(max, v.order || 0), 0);
+      
+      await addDoc(collection(db, 'videoPlaylist'), {
+        name: videoName,
+        url: directUrl,
+        originalUrl: newUrl.trim(),
+        order: maxOrder + 1,
+        enabled: true,
+        createdAt: serverTimestamp(),
+      });
 
-      // Upload com progresso
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      uploadTask.on('state_changed',
-        (snapshot) => {
-          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-          setUploadProgress(progress);
-        },
-        (error) => {
-          console.error('Erro no upload:', error);
-          alert('Erro ao fazer upload do vídeo.');
-          setUploading(false);
-        },
-        async () => {
-          // Upload completo - pega URL e salva no Firestore
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          
-          // Determina ordem (último + 1)
-          const maxOrder = videos.reduce((max, v) => Math.max(max, v.order || 0), 0);
-          
-          await addDoc(collection(db, 'videoPlaylist'), {
-            name: file.name,
-            url: downloadURL,
-            storagePath: fileName,
-            order: maxOrder + 1,
-            enabled: true,
-            createdAt: serverTimestamp(),
-          });
-
-          setUploading(false);
-          setUploadProgress(0);
-        }
-      );
+      setNewUrl('');
+      setNewName('');
     } catch (err) {
-      console.error('Erro:', err);
-      alert('Erro ao processar upload.');
-      setUploading(false);
+      console.error('Erro ao adicionar:', err);
+      alert('Erro ao adicionar vídeo.');
+    } finally {
+      setAdding(false);
     }
-  }
-
-  // Drag and drop
-  function handleDragOver(e) {
-    e.preventDefault();
-    setDragOver(true);
-  }
-
-  function handleDragLeave(e) {
-    e.preventDefault();
-    setDragOver(false);
-  }
-
-  function handleDrop(e) {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleUpload(file);
-  }
-
-  function handleFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) handleUpload(file);
   }
 
   // Atualiza ordem
@@ -374,13 +391,6 @@ export default function VideoManager() {
     if (!confirm(`Remover "${video.name}"?`)) return;
     
     try {
-      // Remove do Storage
-      if (video.storagePath) {
-        const storageRef = ref(storage, video.storagePath);
-        await deleteObject(storageRef).catch(() => {});
-      }
-      
-      // Remove do Firestore
       await deleteDoc(doc(db, 'videoPlaylist', video.id));
     } catch (err) {
       console.error('Erro ao remover:', err);
@@ -398,14 +408,7 @@ export default function VideoManager() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
-        .upload-area:hover {
-          border-color: #22c55e !important;
-          background: rgba(34, 197, 94, 0.1) !important;
-        }
-        .video-item:hover {
-          background: rgba(255,255,255,0.04) !important;
-        }
-        .control-btn:hover {
+        .control-btn:hover:not(:disabled) {
           background: rgba(255,255,255,0.1) !important;
         }
         .small-btn:hover {
@@ -413,6 +416,15 @@ export default function VideoManager() {
         }
         .delete-btn:hover {
           background: rgba(239, 68, 68, 0.2) !important;
+        }
+        .add-input:focus {
+          border-color: #22c55e !important;
+        }
+        .btn-add:hover {
+          opacity: 0.9;
+        }
+        .video-item:hover {
+          background: rgba(255,255,255,0.04) !important;
         }
       `}</style>
       
@@ -425,7 +437,7 @@ export default function VideoManager() {
         {currentVideo && (
           <div style={styles.nowPlaying}>
             <div style={styles.nowPlayingDot}></div>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {control.playing ? 'Tocando:' : 'Pausado:'} {currentVideo.name}
             </span>
           </div>
@@ -436,7 +448,10 @@ export default function VideoManager() {
           <div style={styles.sectionTitle}>Controles</div>
           <div style={styles.controlsGrid}>
             <button 
-              style={styles.btn} 
+              style={{
+                ...styles.btn,
+                ...(videos.length <= 1 ? styles.btnDisabled : {}),
+              }}
               className="control-btn"
               onClick={prevVideo}
               disabled={videos.length <= 1}
@@ -454,7 +469,10 @@ export default function VideoManager() {
               {control.playing ? '⏸️ Pausar' : '▶️ Play'}
             </button>
             <button 
-              style={styles.btn}
+              style={{
+                ...styles.btn,
+                ...(videos.length <= 1 ? styles.btnDisabled : {}),
+              }}
               className="control-btn"
               onClick={nextVideo}
               disabled={videos.length <= 1}
@@ -462,9 +480,12 @@ export default function VideoManager() {
               ⏭️ Próximo
             </button>
             <button 
-              style={styles.btn}
+              style={{
+                ...styles.btn,
+                ...(videos.length === 0 ? styles.btnDisabled : {}),
+              }}
               className="control-btn"
-              onClick={() => selectVideo(0)}
+              onClick={restartPlaylist}
               disabled={videos.length === 0}
             >
               🔄 Reiniciar
@@ -486,45 +507,44 @@ export default function VideoManager() {
           </div>
         </div>
 
-        {/* Upload */}
+        {/* Adicionar vídeo */}
         <div style={styles.section}>
           <div style={styles.sectionTitle}>Adicionar Vídeo</div>
-          <div
-            style={{
-              ...styles.uploadArea,
-              ...(dragOver ? styles.uploadAreaHover : {}),
-            }}
-            className="upload-area"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
+          <div style={styles.addForm}>
             <input
-              ref={fileInputRef}
-              type="file"
-              accept="video/*"
-              onChange={handleFileSelect}
-              style={styles.fileInput}
+              type="text"
+              placeholder="Nome do vídeo (opcional)"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              style={styles.input}
+              className="add-input"
             />
-            {uploading ? (
-              <>
-                <div style={{ marginBottom: 8 }}>Enviando... {uploadProgress}%</div>
-                <div style={styles.progressBar}>
-                  <div style={{ ...styles.progressFill, width: `${uploadProgress}%` }}></div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: 24, marginBottom: 8 }}>📤</div>
-                <div style={{ fontSize: 13, color: '#94a3b8' }}>
-                  Clique ou arraste um vídeo aqui
-                </div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-                  Formatos: MP4, WebM, MOV (máx. 100MB)
-                </div>
-              </>
-            )}
+            <div style={styles.inputGroup}>
+              <input
+                type="text"
+                placeholder="Cole a URL do vídeo (Google Drive, Dropbox, etc)"
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                style={styles.input}
+                className="add-input"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddVideo()}
+              />
+              <button
+                onClick={handleAddVideo}
+                disabled={adding || !newUrl.trim()}
+                style={{
+                  ...styles.btnAdd,
+                  ...(adding || !newUrl.trim() ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+                }}
+                className="btn-add"
+              >
+                {adding ? '...' : '➕ Adicionar'}
+              </button>
+            </div>
+            <div style={styles.helpText}>
+              <strong>Google Drive:</strong> Compartilhe o arquivo → "Qualquer pessoa com o link" → Cole o link aqui.<br/>
+              <strong>Outros:</strong> Cole o link direto do arquivo MP4/WebM.
+            </div>
           </div>
         </div>
 
@@ -549,15 +569,21 @@ export default function VideoManager() {
                     style={styles.orderInput}
                     min={1}
                   />
-                  <div style={styles.videoName} title={video.name}>
-                    {index === control.currentIndex && '▶️ '}
-                    {video.name}
+                  <div style={styles.videoInfo}>
+                    <div style={styles.videoName}>
+                      {index === control.currentIndex && '▶️ '}
+                      {video.name}
+                    </div>
+                    <div style={styles.videoUrl} title={video.originalUrl || video.url}>
+                      {video.originalUrl || video.url}
+                    </div>
                   </div>
                   <div style={styles.videoActions}>
                     <button
                       style={styles.smallBtn}
                       className="small-btn"
                       onClick={() => selectVideo(index)}
+                      title="Reproduzir"
                     >
                       ▶️
                     </button>
@@ -565,6 +591,7 @@ export default function VideoManager() {
                       style={{ ...styles.smallBtn, ...styles.deleteBtn }}
                       className="small-btn delete-btn"
                       onClick={() => removeVideo(video)}
+                      title="Remover"
                     >
                       🗑️
                     </button>
@@ -572,8 +599,9 @@ export default function VideoManager() {
                 </div>
               ))
             ) : (
-              <div style={{ fontSize: 13, color: '#64748b', textAlign: 'center', padding: 20 }}>
-                Nenhum vídeo adicionado ainda
+              <div style={styles.emptyState}>
+                Nenhum vídeo adicionado ainda.<br/>
+                Adicione um vídeo usando a URL acima.
               </div>
             )}
           </div>
