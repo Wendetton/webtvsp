@@ -1,4 +1,4 @@
-// pages/admin.js - Layout Redesenhado
+// pages/admin.js - Layout Redesenhado com VideoManager
 import { useEffect, useState, useRef } from "react";
 import { db } from "../utils/firebase";
 import {
@@ -8,6 +8,7 @@ import {
 import CallPanel from "../components/CallPanel";
 import CarouselManager from '../components/CarouselManager';
 import YoutubePlaylistManager from '../components/YoutubePlaylistManager';
+import VideoManager from '../components/VideoManager';
 import AnnounceSettings from "../components/AnnounceSettings";
 
 /* ========== ESTILOS ========== */
@@ -29,7 +30,7 @@ const styles = {
     backdropFilter: "blur(12px)",
   },
   headerContent: {
-    maxWidth: 1200,
+    maxWidth: 1400,
     margin: "0 auto",
     display: "flex",
     justifyContent: "space-between",
@@ -98,7 +99,7 @@ const styles = {
   },
   
   main: {
-    maxWidth: 1200,
+    maxWidth: 1400,
     margin: "0 auto",
     padding: 24,
     display: "flex",
@@ -106,11 +107,20 @@ const styles = {
     gap: 24,
   },
   
-  mediaSection: {
+  // Seção de mídia - 2 colunas principais
+  mediaGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    gridTemplateColumns: "1fr 1fr",
     gap: 20,
   },
+  
+  // Coluna com 2 cards empilhados
+  mediaColumn: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 20,
+  },
+  
   mediaCard: {
     background: "#111827",
     border: "1px solid rgba(255,255,255,0.08)",
@@ -196,7 +206,7 @@ const styles = {
   },
 };
 
-/* ========== COMPONENTE: Volume do YouTube ========== */
+/* ========== COMPONENTE: Volume do YouTube (legado) ========== */
 function YTLiveVolume() {
   const [val, setVal] = useState(60);
   const [saving, setSaving] = useState(false);
@@ -254,7 +264,7 @@ function YTLiveVolume() {
           </span>
         </div>
         <p style={{ marginTop: 12, fontSize: 12, color: "#94a3b8", lineHeight: 1.4 }}>
-          Dica: 0 = mudo. Em alguns Fire TV o volume é limitado pelo dispositivo.
+          Controle do volume para vídeos do YouTube (se estiver usando).
           {saving && <span style={{ marginLeft: 8, color: "#22c55e" }}>Salvando...</span>}
         </p>
       </div>
@@ -291,8 +301,8 @@ export default function Admin() {
         }
         
         /* Responsividade */
-        @media (max-width: 900px) {
-          .media-section {
+        @media (max-width: 1000px) {
+          .media-grid {
             grid-template-columns: 1fr !important;
           }
         }
@@ -314,7 +324,7 @@ export default function Admin() {
           <div style={styles.logoArea}>
             <div style={styles.logoIcon}>📢</div>
             <div>
-              <h1 style={styles.logoTextH1}>Nome da Clínica</h1>
+              <h1 style={styles.logoTextH1}>São Peregrino</h1>
               <span style={styles.logoTextSpan}>Painel de Chamadas</span>
             </div>
           </div>
@@ -339,12 +349,20 @@ export default function Admin() {
         {/* Seção de Chamadas (topo - destaque) */}
         <CallPanel />
 
-        {/* Seção de Mídia (inferior - 3 colunas) */}
-        <section style={styles.mediaSection} className="media-section">
-          <YoutubePlaylistManager />
-          <YTLiveVolume />
-          <CarouselManager />
-        </section>
+        {/* Seção de Mídia - 2 colunas */}
+        <div style={styles.mediaGrid} className="media-grid">
+          {/* Coluna Esquerda: Player de Vídeos + YouTube */}
+          <div style={styles.mediaColumn}>
+            <VideoManager />
+            <YoutubePlaylistManager />
+            <YTLiveVolume />
+          </div>
+          
+          {/* Coluna Direita: Carrossel */}
+          <div style={styles.mediaColumn}>
+            <CarouselManager />
+          </div>
+        </div>
       </main>
 
       {/* ===== MODAL DE CONFIGURAÇÕES ===== */}
