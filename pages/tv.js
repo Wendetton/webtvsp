@@ -1,22 +1,22 @@
-// pages/tv.js - Layout 100% responsivo + Cores São Peregrino
+// pages/tv.js - VERSÃO DE TESTE SEM CARROSSEL (para diagnóstico)
 import Head from 'next/head';
 import Script from 'next/script';
 import { useEffect, useRef, useState } from 'react';
 import { db } from '../utils/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc } from 'firebase/firestore';
 import YoutubePlayer from '../components/YoutubePlayer';
-import Carousel from '../components/Carousel';
+// import Carousel from '../components/Carousel'; // DESATIVADO PARA TESTE
 
 const GROUP_WINDOW_MS = 30000;
 const DUAL_KEEP_MS = 60000;
 
 // Cores padrão baseadas na logo São Peregrino
 const DEFAULT_COLORS = {
-  bg: '#0a1a14',        // Fundo escuro com tom verde
-  panel: '#0d2118',     // Painel escuro esverdeado
-  accent: '#5cb85c',    // Verde claro da logo
-  text: '#fefefe',      // Texto branco
-  room: '#2d5a3d',      // Verde escuro da logo para consultório
+  bg: '#0a1a14',
+  panel: '#0d2118',
+  accent: '#5cb85c',
+  text: '#fefefe',
+  room: '#2d5a3d',
 };
 
 function enqueueAudio(audioQueueRef, playingRef, nome, sala) {
@@ -122,7 +122,6 @@ export default function TV() {
         leadMs: Number.isFinite(data.leadMs) ? Number(data.leadMs) : 450,
         idleSeconds: Number.isFinite(data.idleSeconds) ? Math.min(300, Math.max(60, Number(data.idleSeconds))) : 120,
         videoId: data.videoId || '',
-        // Novas configurações com cores padrão São Peregrino
         roomFontSize: Number.isFinite(data.roomFontSize) ? Number(data.roomFontSize) : 100,
         roomColor: data.roomColor || DEFAULT_COLORS.room,
         tvBgColor: data.tvBgColor || DEFAULT_COLORS.bg,
@@ -131,7 +130,6 @@ export default function TV() {
         tvTextColor: data.tvTextColor || DEFAULT_COLORS.text,
       };
       
-      // Aplica cores via CSS variables
       const root = document.documentElement;
       root.style.setProperty('--tv-bg', cfg.tvBgColor);
       root.style.setProperty('--tv-panel', cfg.tvPanelColor);
@@ -139,7 +137,6 @@ export default function TV() {
       root.style.setProperty('--tv-text', cfg.tvTextColor);
       root.style.setProperty('--room-color', cfg.roomColor);
       
-      // Aplica tamanho da fonte do consultório
       const fontScale = cfg.roomFontSize / 100;
       root.style.setProperty('--room-font-scale', String(fontScale));
       
@@ -217,13 +214,13 @@ export default function TV() {
   return (
     <div className="tv-screen">
       <Head>
-        <title>Chamador na TV</title>
+        <title>Chamador na TV - TESTE</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </Head>
 
-      {/* AREA PRINCIPAL: YouTube + Carrossel */}
+      {/* AREA PRINCIPAL: YouTube OCUPA TUDO (sem carrossel para teste) */}
       <div className="tv-main">
-        <div className="tv-video">
+        <div className="tv-video-full">
           {hasPlaylist ? (
             <YoutubePlayer playlist={ytList} />
           ) : hasSingleVideo ? (
@@ -234,9 +231,6 @@ export default function TV() {
             </div>
           )}
         </div>
-        <div className="tv-carousel">
-          <Carousel />
-        </div>
       </div>
 
       {/* RODAPE: Chamadas */}
@@ -245,7 +239,7 @@ export default function TV() {
           {recentItems.length ? (
             recentItems.map((h, i) => (
               <span key={i} className="called-chip">
-                {h.nome} <span className="muted">• Consultório {h.sala}</span>
+                {h.nome} <span className="muted">• Cons. {h.sala}</span>
               </span>
             ))
           ) : null}
@@ -295,7 +289,7 @@ export default function TV() {
       {/* Script de voz */}
       <Script src="/tv-ducking.js" strategy="afterInteractive" />
 
-      {/* ===== ESTILOS RESPONSIVOS ===== */}
+      {/* ===== ESTILOS ===== */}
       <style jsx global>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body, #__next { 
@@ -317,15 +311,12 @@ export default function TV() {
           --tv-muted: #93a0b3;
           --room-color: ${DEFAULT_COLORS.room};
           --room-font-scale: 1;
-          
-          /* Alturas responsivas baseadas em vh */
           --footer-height: 42vh;
           --main-height: 58vh;
           --gap: 1.2vh;
           --padding: 1.2vh;
         }
 
-        /* ===== TELA PRINCIPAL ===== */
         .tv-screen {
           width: 100vw;
           height: 100vh;
@@ -335,18 +326,14 @@ export default function TV() {
           overflow: hidden;
         }
 
-        /* ===== AREA PRINCIPAL (Video + Carrossel) ===== */
         .tv-main {
           flex: 1;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: var(--gap);
           padding: var(--padding);
           min-height: 0;
         }
 
-        /* Video container */
-        .tv-video {
+        /* Video ocupa tudo (sem carrossel) */
+        .tv-video-full {
           position: relative;
           width: 100%;
           height: 100%;
@@ -355,7 +342,7 @@ export default function TV() {
           overflow: hidden;
         }
 
-        .tv-video > * {
+        .tv-video-full > * {
           position: absolute;
           top: 0;
           left: 0;
@@ -372,18 +359,6 @@ export default function TV() {
           font-size: 2vh;
         }
 
-        /* Carrossel - horizontal 16:9 */
-        .tv-carousel {
-          position: relative;
-          width: 100%;
-          height: 100%;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 12px;
-          overflow: hidden;
-        }
-
-        /* ===== RODAPE ===== */
         .tv-footer {
           height: var(--footer-height);
           background: var(--tv-panel);
@@ -395,7 +370,6 @@ export default function TV() {
           gap: var(--gap);
         }
 
-        /* Lista de chamados recentes */
         .called-list {
           height: 7vh;
           min-height: 50px;
@@ -421,7 +395,6 @@ export default function TV() {
           flex-shrink: 0;
         }
 
-        /* Area de chamada atual */
         .current-call {
           flex: 1;
           border-radius: 16px;
@@ -445,7 +418,6 @@ export default function TV() {
           margin-bottom: 1.5vh;
         }
 
-        /* Modo IDLE (logo) - AUMENTADA */
         .current-call.idle.idle-full {
           background: #f5f5f5;
           outline: none;
@@ -460,7 +432,6 @@ export default function TV() {
           animation: tvFadeIn 380ms ease forwards;
         }
 
-        /* Nome do paciente - SINGLE */
         .now-single {
           display: flex;
           flex-direction: column;
@@ -487,7 +458,6 @@ export default function TV() {
           color: var(--room-color, var(--tv-accent));
         }
 
-        /* Modo DUAL (2 pacientes) */
         .now-cards {
           display: grid;
           gap: 2vw;
@@ -524,7 +494,6 @@ export default function TV() {
           color: var(--room-color, var(--tv-accent));
         }
 
-        /* Animacoes */
         @keyframes tvFadeIn {
           from { opacity: 0; transform: scale(0.98); }
           to { opacity: 1; transform: none; }
@@ -549,24 +518,14 @@ export default function TV() {
           animation: beacon 1.1s ease-out 2;
         }
 
-        /* Util */
         .muted { color: var(--tv-muted); }
 
-        /* ===== RESPONSIVIDADE PARA DIFERENTES TELAS ===== */
-        
-        /* TV Vertical / Portrait */
         @media (orientation: portrait) {
-          .tv-main {
-            grid-template-columns: 1fr;
-            grid-template-rows: 1fr 1fr;
-          }
-          
           :root {
             --footer-height: 35vh;
           }
         }
 
-        /* Telas pequenas (tablets, monitores pequenos) */
         @media (max-height: 600px) {
           :root {
             --footer-height: 45vh;
@@ -583,14 +542,12 @@ export default function TV() {
           }
         }
 
-        /* Fire TV Stick / TV Box */
         @media (min-width: 1280px) and (min-height: 720px) {
           :root {
             --footer-height: 40vh;
           }
         }
 
-        /* 4K TVs */
         @media (min-width: 3000px) {
           :root {
             --footer-height: 38vh;
